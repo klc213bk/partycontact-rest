@@ -61,7 +61,7 @@ public class PartyContactController {
 
 	}
 	
-	@PostMapping(value="/stopLoadData1")
+	@PostMapping(value="/stopLoadData")
 	@ResponseBody
 	public void stopLoadData(){
 		logger.info(">>>>stopLoadData");

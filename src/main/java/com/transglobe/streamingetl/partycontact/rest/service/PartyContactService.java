@@ -21,120 +21,112 @@ import org.springframework.stereotype.Service;
 public class PartyContactService {
 	static final Logger LOG = LoggerFactory.getLogger(PartyContactService.class);
 
-	@Value("${ignite.config.file1}")
-	private String igniteConfigFile1;
-
-	@Value("${ignite.config.file2}")
-	private String igniteConfigFile2;
+	@Value("${ignite.config.file}")
+	private String igniteConfigFile;
 
 	@Value("${partycontact.base.dir}")
 	private String partyContactBaseDir;
 
-	@Value("${ignite1.loaddata.script}")
-	private String ignite1LoaddataScript;
+	@Value("${ignite.loaddata.script}")
+	private String igniteLoaddataScript;
+	
+	@Value("${ignite.bean.name}")
+	private String igniteBeanName;
 
-	@Value("${ignite2.loaddata.script}")
-	private String ignite2LoaddataScript;
+	private FileSystemXmlApplicationContext igniteCtx;
 
-	private FileSystemXmlApplicationContext igniteCtx1;
+	private Process loadDataProcess;
+	private ExecutorService loadDataExecutor;
 
-	private FileSystemXmlApplicationContext igniteCtx2;
+	public void startIgnite() {
 
-	private Process loadDataProcess1;
-	private ExecutorService loadDataExecutor1;
-
-	private Process loadDataProcess2;
-	private ExecutorService loadDataExecutor2;
-
-	public void startIgnite1() {
-
-		if (igniteCtx1 == null || !igniteCtx1.isActive()) {
-			igniteCtx1 =new FileSystemXmlApplicationContext("file:"+igniteConfigFile1);
+		if (igniteCtx == null || !igniteCtx.isActive()) {
+			igniteCtx =new FileSystemXmlApplicationContext("file:"+igniteConfigFile);
 
 			//			try {
 			// Get ignite from Spring (note that local cluster node is already started).
-			Ignite ignite1 = (Ignite)igniteCtx1.getBean("igniteBean1");
+			Ignite ignite = (Ignite)igniteCtx.getBean(igniteBeanName);
 
-			LOG.info(">>> ignite1 started!!!");
+			LOG.info(">>> ignite started!!!");
 		} else {
-			LOG.info(">>> igniteCtx1 is still active. Cannot start");
+			LOG.info(">>> igniteCtx is still active. Cannot start");
 		}
 
 	}
 
-	public void stopIgnite1() {
+	public void stopIgnite() {
 
-		if (igniteCtx1 == null || !igniteCtx1.isActive()) {
-			LOG.info(">>> igniteCtx1 is null or is not active. Cannot stop");
+		if (igniteCtx == null || !igniteCtx.isActive()) {
+			LOG.info(">>> igniteCtx is null or is not active. Cannot stop");
 
 		} else {
-			igniteCtx1.close();
+			igniteCtx.close();
 
-			LOG.info(">>> igniteCtx1 close.");
+			LOG.info(">>> igniteCtx close.");
 		}
 	}
-	public void stopLoadData1() {
-		if (loadDataProcess1.isAlive()) {
-			loadDataProcess1.destroy();
-			loadDataExecutor1.shutdown();
-			if (!loadDataExecutor1.isTerminated()) {
-				loadDataExecutor1.shutdownNow();
+	public void stopLoadData() {
+		if (loadDataProcess.isAlive()) {
+			loadDataProcess.destroy();
+			loadDataExecutor.shutdown();
+			if (!loadDataExecutor.isTerminated()) {
+				loadDataExecutor.shutdownNow();
 
 				try {
-					loadDataExecutor1.awaitTermination(600, TimeUnit.SECONDS);
+					loadDataExecutor.awaitTermination(600, TimeUnit.SECONDS);
 				} catch (InterruptedException e) {
 					LOG.error(">>> ERROR!!!, msg={}, stacetrace={}",
 							ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
 				}
 
 			}
-			LOG.info(">>> LoadData1 stopped");
+			LOG.info(">>> LoadData stopped");
 		} else {
-			LOG.info(">>> LoadData1 is NOT alive, cannot stop");
+			LOG.info(">>> LoadData is NOT alive, cannot stop");
 		}
 	}
-	public void stopLoadData2() {
-		if (loadDataProcess2.isAlive()) {
-			loadDataProcess2.destroy();
-			loadDataExecutor2.shutdown();
-			if (!loadDataExecutor2.isTerminated()) {
-				loadDataExecutor2.shutdownNow();
-
-				try {
-					loadDataExecutor2.awaitTermination(600, TimeUnit.SECONDS);
-				} catch (InterruptedException e) {
-					LOG.error(">>> ERROR!!!, msg={}, stacetrace={}",
-							ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-				}
-
-			}
-			LOG.info(">>> LoadData2 stopped");
-		} else {
-			LOG.info(">>> LoadData2 is NOT alive, cannot stop");
-		}
-	}
-	public void loadData1() {
+//	public void stopLoadData2() {
+//		if (loadDataProcess2.isAlive()) {
+//			loadDataProcess2.destroy();
+//			loadDataExecutor2.shutdown();
+//			if (!loadDataExecutor2.isTerminated()) {
+//				loadDataExecutor2.shutdownNow();
+//
+//				try {
+//					loadDataExecutor2.awaitTermination(600, TimeUnit.SECONDS);
+//				} catch (InterruptedException e) {
+//					LOG.error(">>> ERROR!!!, msg={}, stacetrace={}",
+//							ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+//				}
+//
+//			}
+//			LOG.info(">>> LoadData2 stopped");
+//		} else {
+//			LOG.info(">>> LoadData2 is NOT alive, cannot stop");
+//		}
+//	}
+	public void loadData() {
 
 		try {
-			if (loadDataProcess1 == null || !loadDataProcess1.isAlive()) {
+			if (loadDataProcess == null || !loadDataProcess.isAlive()) {
 				ProcessBuilder builder = new ProcessBuilder();
-				builder.command("sh", "-c", ignite1LoaddataScript);
+				builder.command("sh", "-c", igniteLoaddataScript);
 
 				builder.directory(new File(partyContactBaseDir));
-				loadDataProcess1 = builder.start();
+				loadDataProcess = builder.start();
 
-				loadDataExecutor1 = Executors.newSingleThreadExecutor();
-				loadDataExecutor1.submit(new Runnable() {
+				loadDataExecutor = Executors.newSingleThreadExecutor();
+				loadDataExecutor.submit(new Runnable() {
 
 					@Override
 					public void run() {
-						BufferedReader reader = new BufferedReader(new InputStreamReader(loadDataProcess1.getInputStream()));
+						BufferedReader reader = new BufferedReader(new InputStreamReader(loadDataProcess.getInputStream()));
 						reader.lines().forEach(str -> LOG.info(str));
 					}
 
 				});
 
-				int exitVal = loadDataProcess1.waitFor();
+				int exitVal = loadDataProcess.waitFor();
 				if (exitVal == 0) {
 					LOG.info(">>> Success!!! Loaddata1 ");
 				} else {
@@ -149,69 +141,69 @@ public class PartyContactService {
 			LOG.error(">>> Error!!!, Loaddata1, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
 		}
 	}
-	public void loadData2() {
-
-		try {
-			if (loadDataProcess2 == null || !loadDataProcess2.isAlive()) {
-				ProcessBuilder builder = new ProcessBuilder();
-				builder.command("sh", "-c", ignite2LoaddataScript);
-
-				builder.directory(new File(partyContactBaseDir));
-				loadDataProcess2 = builder.start();
-
-				loadDataExecutor2 = Executors.newSingleThreadExecutor();
-				loadDataExecutor2.submit(new Runnable() {
-
-					@Override
-					public void run() {
-						BufferedReader reader = new BufferedReader(new InputStreamReader(loadDataProcess2.getInputStream()));
-						reader.lines().forEach(str -> LOG.info(str));
-					}
-
-				});
-
-				int exitVal = loadDataProcess2.waitFor();
-				if (exitVal == 0) {
-					LOG.info(">>> Success!!! Loaddata2");
-				} else {
-					LOG.error(">>> Error!!! Loaddata2, exitcode={}", exitVal);
-				}
-			} else {
-				LOG.warn(" >>> loadDataProcess2 is already Running.");
-			}
-		} catch (IOException e) {
-			LOG.error(">>> Error!!!, Loaddata2, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-		} catch (InterruptedException e) {
-			LOG.error(">>> Error!!!, Loaddata2, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-		}
-	}
-
-	public void startIgnite2() {
-
-		if (igniteCtx2 == null || !igniteCtx2.isActive()) {
-			igniteCtx2 =new FileSystemXmlApplicationContext("file:"+igniteConfigFile2);
-			//	new FileSystemXmlApplicationContext("file:/home/steven/gitrepo/transglobe/streamingetl-pcr420669/env-dev1/config/ignite-config-1.xml");
-			//		            new ClassPathXmlApplicationContext("ignite-config-1.xml");
-			//			try {
-			// Get ignite from Spring (note that local cluster node is already started).
-			Ignite ignite2 = (Ignite)igniteCtx2.getBean("igniteBean2");
-
-			LOG.info(">>> ignite2 started!!!");
-
-		} else {
-			LOG.info(">>> igniteCtx2 is still active. Cannot start");
-		}
-
-	}
-	public void stopIgnite2() {
-
-		if (igniteCtx2 == null || !igniteCtx2.isActive()) {
-			LOG.info(">>> igniteCtx2 is null or is not active.");
-
-		} else {
-			igniteCtx2.close();
-
-			LOG.info(">>> igniteCtx2 close.");
-		}
-	}
+//	public void loadData2() {
+//
+//		try {
+//			if (loadDataProcess2 == null || !loadDataProcess2.isAlive()) {
+//				ProcessBuilder builder = new ProcessBuilder();
+//				builder.command("sh", "-c", ignite2LoaddataScript);
+//
+//				builder.directory(new File(partyContactBaseDir));
+//				loadDataProcess2 = builder.start();
+//
+//				loadDataExecutor2 = Executors.newSingleThreadExecutor();
+//				loadDataExecutor2.submit(new Runnable() {
+//
+//					@Override
+//					public void run() {
+//						BufferedReader reader = new BufferedReader(new InputStreamReader(loadDataProcess2.getInputStream()));
+//						reader.lines().forEach(str -> LOG.info(str));
+//					}
+//
+//				});
+//
+//				int exitVal = loadDataProcess2.waitFor();
+//				if (exitVal == 0) {
+//					LOG.info(">>> Success!!! Loaddata2");
+//				} else {
+//					LOG.error(">>> Error!!! Loaddata2, exitcode={}", exitVal);
+//				}
+//			} else {
+//				LOG.warn(" >>> loadDataProcess2 is already Running.");
+//			}
+//		} catch (IOException e) {
+//			LOG.error(">>> Error!!!, Loaddata2, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+//		} catch (InterruptedException e) {
+//			LOG.error(">>> Error!!!, Loaddata2, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+//		}
+//	}
+//
+//	public void startIgnite2() {
+//
+//		if (igniteCtx2 == null || !igniteCtx2.isActive()) {
+//			igniteCtx2 =new FileSystemXmlApplicationContext("file:"+igniteConfigFile2);
+//			//	new FileSystemXmlApplicationContext("file:/home/steven/gitrepo/transglobe/streamingetl-pcr420669/env-dev1/config/ignite-config-1.xml");
+//			//		            new ClassPathXmlApplicationContext("ignite-config-1.xml");
+//			//			try {
+//			// Get ignite from Spring (note that local cluster node is already started).
+//			Ignite ignite2 = (Ignite)igniteCtx2.getBean("igniteBean2");
+//
+//			LOG.info(">>> ignite2 started!!!");
+//
+//		} else {
+//			LOG.info(">>> igniteCtx2 is still active. Cannot start");
+//		}
+//
+//	}
+//	public void stopIgnite2() {
+//
+//		if (igniteCtx2 == null || !igniteCtx2.isActive()) {
+//			LOG.info(">>> igniteCtx2 is null or is not active.");
+//
+//		} else {
+//			igniteCtx2.close();
+//
+//			LOG.info(">>> igniteCtx2 close.");
+//		}
+//	}
 }

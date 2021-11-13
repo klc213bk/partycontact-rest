@@ -7,10 +7,17 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.transglobe.streamingetl.partycontact.rest.bean.Response;
+import com.transglobe.streamingetl.partycontact.rest.service.LoadDataService;
 import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService;
 
 @RestController
@@ -22,58 +29,64 @@ public class PartyContactController {
 	@Autowired
 	private PartyContactService partyContactService;
 
-	@PostMapping(value="/startIgnite")
-	@ResponseBody
-	public void startIgnite(){
-		logger.info(">>>>startIgnite");
-		long t0 = System.currentTimeMillis();
-		
-		partyContactService.startIgnite();
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>startIgnite span={}", (t1 - t0));
-
-	}
-	@PostMapping(value="/stopIgnite")
-	@ResponseBody
-	public void stopIgnite(){
-		logger.info(">>>>stopIgnite");
-		long t0 = System.currentTimeMillis();
-		partyContactService.stopIgnite();
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>stopIgnite span={}", (t1 - t0));
-
-	}
-
-	@PostMapping(value="/loadData")
-	@ResponseBody
-	public void loadData(){
-		logger.info(">>>>loadData");
-		long t0 = System.currentTimeMillis();
-		
-		partyContactService.loadData();
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>loadData completed. span={}", (t1 - t0));
-
-	}
+	@Autowired
+	private LoadDataService loadDataService;
 	
-	@PostMapping(value="/stopLoadData")
+	@PostMapping(value="/createTable")
 	@ResponseBody
-	public void stopLoadData(){
-		logger.info(">>>>stopLoadData");
+	public ResponseEntity<Response> createPartyContactTable() throws Exception{
+		logger.info(">>>>createTable");
 		long t0 = System.currentTimeMillis();
 		
-		partyContactService.stopLoadData();
+		partyContactService.createPartyContactTable();
 		
 		long t1 = System.currentTimeMillis();
 		
-		logger.info(">>>>stopLoadData completed. span={}", (t1 - t0));
+		logger.info(">>>>createTable finished, span={}", (t1 - t0));
 
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
 	}
-	
+	@PostMapping(value="/dropTable")
+	@ResponseBody
+	public ResponseEntity<Response> dropPartyContactTable() throws Exception{
+		logger.info(">>>>dropTable");
+		long t0 = System.currentTimeMillis();
+		
+		partyContactService.dropPartyContactTable();
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>dropTable finished, span={}", (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
+	@PostMapping(value="/truncateTable")
+	@ResponseBody
+	public ResponseEntity<Response> truncatePartyContactTable() throws Exception{
+		logger.info(">>>>truncateTable");
+		long t0 = System.currentTimeMillis();
+		
+		partyContactService.truncatePartyContactTable();
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>truncateTable finished, span={}", (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
+	@PutMapping(value="/loadData/{table}")
+	@ResponseBody
+	public ResponseEntity<Response> loadData(@PathVariable("table") String table) throws Exception{
+		logger.info(">>>>loadData {}", table);
+		long t0 = System.currentTimeMillis();
+		
+		loadDataService.loadTable(table);
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>loadData {} finished, span={}", table, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
 
 }

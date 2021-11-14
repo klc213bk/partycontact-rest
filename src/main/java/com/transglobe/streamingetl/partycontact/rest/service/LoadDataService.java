@@ -1,8 +1,11 @@
 package com.transglobe.streamingetl.partycontact.rest.service;
 
+import java.io.BufferedReader;
 import java.io.Console;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -18,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.apache.commons.dbcp2.BasicDataSource;
@@ -30,16 +34,13 @@ import org.springframework.stereotype.Service;
 
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
 
-
-
-@Service
+//@Service
 public class LoadDataService {
 	static final Logger LOG = LoggerFactory.getLogger(LoadDataService.class);
 
 	private static final int THREADS = 15;
 
 	private static final int BATCH_SIZE = 3000;
-
 
 	@Value("${table.name.partycontact}")
 	private String tableNamePartycontact;
@@ -70,7 +71,16 @@ public class LoadDataService {
 
 	@Value("${partycontact.db.password}")
 	private String partycontactDbPassword;
-
+    
+	@Value("${partycontact.base.dir}")
+	private String partycontactBaseDir;
+    
+	@Value("${partycontact.load.script}")
+	private String partycontactLoadScript;
+	
+	private Process loadDataProcess;
+	private ExecutorService loadDataExecutor;
+	
 	public long loadTable(String table) throws Exception {
 		BasicDataSource sourceConnectionPool = null;
 		BasicDataSource sinkConnectionPool = null;
@@ -124,6 +134,43 @@ public class LoadDataService {
 		}
 		return count;
 	}
+	
+	public void createIndexes() throws Exception {
+		LOG.info(">>>>>>>>>>>> createIndexes ");
+
+		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + tableNamePartycontact + " (ADDRESS_1)");
+		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + tableNamePartycontact + " (EMAIL)");
+		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + tableNamePartycontact + " (MOBILE_TEL)");
+		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + tableNamePartycontact + " (CERTI_CODE)");
+		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + tableNamePartycontact + " (POLICY_ID)");
+		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + tableNamePartycontact + " (UPDATE_TIMESTAMP)");
+		
+	}
+	private void executeScript(String script) throws Exception {
+	
+		Connection conn = null;
+		Statement stmt = null;
+		try {
+			
+			Class.forName(partycontactDbDriver);
+			conn = DriverManager.getConnection(partycontactDbUrl, partycontactDbUsername, partycontactDbPassword);
+
+			stmt = conn.createStatement();
+			stmt.executeUpdate(script);
+			stmt.close();
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (stmt != null) stmt.close();
+			if (conn != null) conn.close();
+		}
+		
+	}
+
 	private long loadTable(String table, Integer roleType, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool) throws Exception {
 
 		ExecutorService executor = Executors.newFixedThreadPool(THREADS);
@@ -306,7 +353,7 @@ public class LoadDataService {
 			sinkConn.setAutoCommit(false); 
 			pstmt = sinkConn.prepareStatement(
 					"insert into " + tableNamePartycontact + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
-							+ " values (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP(),CURRENT_TIMESTAMP(),?,?,?)");
+							+ " values (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?)");
 
 			while (rs.next()) {
 				count++;
@@ -421,6 +468,60 @@ public class LoadDataService {
 		return map;
 	}
 
+	public void loadData() {
 
+		try {
+			if (loadDataProcess == null || !loadDataProcess.isAlive()) {
+				ProcessBuilder builder = new ProcessBuilder();
+				builder.command("sh", "-c", partycontactLoadScript);
 
+				builder.directory(new File(partycontactBaseDir));
+				loadDataProcess = builder.start();
+
+				loadDataExecutor = Executors.newSingleThreadExecutor();
+				loadDataExecutor.submit(new Runnable() {
+
+					@Override
+					public void run() {
+						BufferedReader reader = new BufferedReader(new InputStreamReader(loadDataProcess.getInputStream()));
+						reader.lines().forEach(str -> LOG.info(str));
+					}
+
+				});
+
+				int exitVal = loadDataProcess.waitFor();
+				if (exitVal == 0) {
+					LOG.info(">>> Success!!! Loaddata1 ");
+				} else {
+					LOG.error(">>> Error!!! Loaddata1, exitcode={}", exitVal);
+				}
+			} else {
+				LOG.warn(" >>> loadDataProcess1 is already Running.");
+			}
+		} catch (IOException e) {
+			LOG.error(">>> Error!!!, Loaddata1, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+		} catch (InterruptedException e) {
+			LOG.error(">>> Error!!!, Loaddata1, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+		}
+	}
+	public void stopLoadData() {
+		if (loadDataProcess.isAlive()) {
+			loadDataProcess.destroy();
+			loadDataExecutor.shutdown();
+			if (!loadDataExecutor.isTerminated()) {
+				loadDataExecutor.shutdownNow();
+
+				try {
+					loadDataExecutor.awaitTermination(600, TimeUnit.SECONDS);
+				} catch (InterruptedException e) {
+					LOG.error(">>> ERROR!!!, msg={}, stacetrace={}",
+							ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+				}
+
+			}
+			LOG.info(">>> LoadData stopped");
+		} else {
+			LOG.info(">>> LoadData is NOT alive, cannot stop");
+		}
+	}
 }

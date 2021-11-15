@@ -79,6 +79,20 @@ public class PartyContactController {
 
 		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
 	}
+	@PostMapping(value="/addPrimaryKey")
+	@ResponseBody
+	public ResponseEntity<Response> addPrimaryKey() throws Exception{
+		logger.info(">>>>addPrimaryKey ");
+		long t0 = System.currentTimeMillis();
+		
+		partyContactService.addPrimaryKey();
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>addPrimaryKey finished, span={}", (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
 	@PostMapping(value="/createIndex/{columnName}")
 	@ResponseBody
 	public ResponseEntity<Response> createIndex(@PathVariable("columnName") String columnName) throws Exception{

@@ -36,17 +36,17 @@ import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
 @Service
 public class PartyContactService {
 	static final Logger LOG = LoggerFactory.getLogger(PartyContactService.class);
-			
+
 	private static final int THREADS = 15;
 
 	private static final int BATCH_SIZE = 3000;
-	
+
 	@Value("${table.name.partycontact}")
 	private String tableNamePartycontact;
 
 	@Value("${table.create.file.party_contact}")
 	private String tableCreateFilePartycontact;
-	
+
 	@Value("${source.db.driver}")
 	private String sourceDbDriver;
 
@@ -58,7 +58,7 @@ public class PartyContactService {
 
 	@Value("${source.db.password}")
 	private String sourceDbPassword;
-	
+
 	@Value("${partycontact.db.driver}")
 	private String partycontactDbDriver;
 
@@ -70,20 +70,20 @@ public class PartyContactService {
 
 	@Value("${partycontact.db.password}")
 	private String partycontactDbPassword;
-	
+
 	@Value("${partycontact.base.dir}")
 	private String partycontactBaseDir;
-    
+
 	@Value("${partycontact.load.script}")
 	private String partycontactLoadScript;
-	
+
 	public void createPartyContactTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> createPartyContactTable ");
 
 		Connection conn = null;
 		PreparedStatement pstmt = null;
 		try {
-			
+
 			LOG.info(">>>>>> create table File={} ",tableCreateFilePartycontact);
 
 			Class.forName(partycontactDbDriver);
@@ -109,7 +109,7 @@ public class PartyContactService {
 		Connection conn = null;
 		Statement stmt = null;
 		try {
-			
+
 			Class.forName(partycontactDbDriver);
 			conn = DriverManager.getConnection(partycontactDbUrl, partycontactDbUsername, partycontactDbPassword);
 
@@ -128,14 +128,14 @@ public class PartyContactService {
 			if (stmt != null) stmt.close();
 			if (conn != null) conn.close();
 		}
-		
+
 	}
 
 	public void truncatePartyContactTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> truncatePartyContactTable ");
 
 		executeScript("TRUNCATE TABLE " + tableNamePartycontact);
-			
+
 	}
 	public long loadTable(String table) throws Exception {
 		BasicDataSource sourceConnectionPool = null;
@@ -175,7 +175,7 @@ public class PartyContactService {
 			}
 		} catch (Exception ex) {
 			LOG.error("message={}, stack trace={}", ex.getMessage(), ExceptionUtils.getStackTrace(ex));
-			
+
 		} finally {
 			try {
 				if (sourceConnectionPool != null) sourceConnectionPool.close();
@@ -190,31 +190,39 @@ public class PartyContactService {
 		}
 		return count;
 	}
-	
+
+	public void addPrimaryKey() throws Exception {
+		LOG.info(">>>>>>>>>>>> addPrimaryKey ");
+
+		executeScript("ALTER TABLE  " + tableNamePartycontact + " ADD CONSTRAINT PK_T_PARTY_CONTACT PRIMARY KEY (ROLE_TYPE,LIST_ID)");
+		
+		LOG.info(">>>>>>>>>>>> addPrimaryKey done!!! ");
+	}
+
 	public void createIndex(String columnName) throws Exception {
 		LOG.info(">>>>>>>>>>>> createIndexes ");
 
 		if ("ADDRESS_1".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + tableNamePartycontact + " (ADDRESS_1)");
-		LOG.info(">>>>>>>>>>>> 1/7 createIndex for addr1 done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + tableNamePartycontact + " (ADDRESS_1)");
+			LOG.info(">>>>>>>>>>>> 1/7 createIndex for addr1 done!!! ");
 		} else if ("EMAIL".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + tableNamePartycontact + " (EMAIL)");
-		LOG.info(">>>>>>>>>>>> 2/7 createIndex for email done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + tableNamePartycontact + " (EMAIL)");
+			LOG.info(">>>>>>>>>>>> 2/7 createIndex for email done!!! ");
 		}  else if ("MOBILE_TEL".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + tableNamePartycontact + " (MOBILE_TEL)");
-		LOG.info(">>>>>>>>>>>> 3/7 createIndex for mobile_tel done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + tableNamePartycontact + " (MOBILE_TEL)");
+			LOG.info(">>>>>>>>>>>> 3/7 createIndex for mobile_tel done!!! ");
 		} else if ("CERTI_CODE".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + tableNamePartycontact + " (CERTI_CODE)");
-		LOG.info(">>>>>>>>>>>> 4/7 createIndex for certi_code done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + tableNamePartycontact + " (CERTI_CODE)");
+			LOG.info(">>>>>>>>>>>> 4/7 createIndex for certi_code done!!! ");
 		} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + tableNamePartycontact + " (POLICY_ID)");
-		LOG.info(">>>>>>>>>>>> 5/7 createIndex for policy_id done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + tableNamePartycontact + " (POLICY_ID)");
+			LOG.info(">>>>>>>>>>>> 5/7 createIndex for policy_id done!!! ");
 		} else if ("UPDATE_TIME".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TIME ON " + tableNamePartycontact + " (UPDATE_TIME)");
-		LOG.info(">>>>>>>>>>>> 6/7 createIndex for update_time done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TIME ON " + tableNamePartycontact + " (UPDATE_TIME)");
+			LOG.info(">>>>>>>>>>>> 6/7 createIndex for update_time done!!! ");
 		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
-		executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + tableNamePartycontact + " (UPDATE_TIMESTAMP)");
-		LOG.info(">>>>>>>>>>>> 7/7 createIndex for update_timestamp done!!! ");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + tableNamePartycontact + " (UPDATE_TIMESTAMP)");
+			LOG.info(">>>>>>>>>>>> 7/7 createIndex for update_timestamp done!!! ");
 		} else {
 			throw new Exception("Invalid Column Name:" + columnName);
 		}
@@ -516,11 +524,11 @@ public class PartyContactService {
 	}
 
 	private void executeScript(String script) throws Exception {
-	
+
 		Connection conn = null;
 		Statement stmt = null;
 		try {
-			
+
 			Class.forName(partycontactDbDriver);
 			conn = DriverManager.getConnection(partycontactDbUrl, partycontactDbUsername, partycontactDbPassword);
 
@@ -537,12 +545,12 @@ public class PartyContactService {
 			if (stmt != null) stmt.close();
 			if (conn != null) conn.close();
 		}
-		
+
 	}
 	private void executeSqlScriptFile(Connection conn, String sqlScriptFile) throws Exception {
 
 		Statement stmt = null;
-	
+
 		try (InputStream inputStream = new ClassPathResource(sqlScriptFile).getInputStream()) {
 			String createTableScript = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
 			stmt = conn.createStatement();

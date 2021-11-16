@@ -20,7 +20,7 @@ public class PartyContactController {
 	static final Logger logger = LoggerFactory.getLogger(PartyContactController.class);
 	
 
-	@Autowired
+//	@Autowired
 	private PartyContactService partyContactService;
 	
 	@PostMapping(value="/createTable")

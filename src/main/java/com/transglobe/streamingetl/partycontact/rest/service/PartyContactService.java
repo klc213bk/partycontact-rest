@@ -41,34 +41,34 @@ public class PartyContactService {
 
 	private static final int BATCH_SIZE = 3000;
 
-	@Value("${table.name.partycontact}")
+//	@Value("${table.name.partycontact}")
 	private String tableNamePartycontact;
 
-	@Value("${table.create.file.party_contact}")
+//	@Value("${table.create.file.party_contact}")
 	private String tableCreateFilePartycontact;
 
-	@Value("${source.db.driver}")
+//	@Value("${source.db.driver}")
 	private String sourceDbDriver;
 
-	@Value("${source.db.url}")
+//	@Value("${source.db.url}")
 	private String sourceDbUrl;
 
-	@Value("${source.db.username}")
+//	@Value("${source.db.username}")
 	private String sourceDbUsername;
 
-	@Value("${source.db.password}")
+//	@Value("${source.db.password}")
 	private String sourceDbPassword;
 
-	@Value("${partycontact.db.driver}")
+//	@Value("${partycontact.db.driver}")
 	private String partycontactDbDriver;
 
-	@Value("${partycontact.db.url}")
+//	@Value("${partycontact.db.url}")
 	private String partycontactDbUrl;
 
-	@Value("${partycontact.db.username}")
+//	@Value("${partycontact.db.username}")
 	private String partycontactDbUsername;
 
-	@Value("${partycontact.db.password}")
+//	@Value("${partycontact.db.password}")
 	private String partycontactDbPassword;
 
 	public void createPartyContactTable() throws Exception {

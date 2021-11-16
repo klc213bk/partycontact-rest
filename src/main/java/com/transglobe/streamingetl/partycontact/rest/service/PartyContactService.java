@@ -71,12 +71,6 @@ public class PartyContactService {
 	@Value("${partycontact.db.password}")
 	private String partycontactDbPassword;
 
-	@Value("${partycontact.base.dir}")
-	private String partycontactBaseDir;
-
-	@Value("${partycontact.load.script}")
-	private String partycontactLoadScript;
-
 	public void createPartyContactTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> createPartyContactTable ");
 
@@ -106,28 +100,9 @@ public class PartyContactService {
 	public void dropPartyContactTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> dropPartyContactTable ");
 
-		Connection conn = null;
-		Statement stmt = null;
-		try {
+		executeScript("DROP TABLE " + tableNamePartycontact);
 
-			Class.forName(partycontactDbDriver);
-			conn = DriverManager.getConnection(partycontactDbUrl, partycontactDbUsername, partycontactDbPassword);
-
-			stmt = conn.createStatement();
-			stmt.executeUpdate("DROP TABLE " + tableNamePartycontact);
-			stmt.close();
-
-			LOG.info(">>>>>>>>>>>> dropPartyContactTable Done!!!");
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
-		} finally {
-			if (stmt != null) stmt.close();
-			if (conn != null) conn.close();
-		}
+		LOG.info(">>>>>>>>>>>> dropPartyContactTable Done!!!");
 
 	}
 
@@ -136,6 +111,7 @@ public class PartyContactService {
 
 		executeScript("TRUNCATE TABLE " + tableNamePartycontact);
 
+		LOG.info(">>>>>>>>>>>> truncatePartyContactTable Done!!!");
 	}
 	public long loadTable(String table) throws Exception {
 		BasicDataSource sourceConnectionPool = null;

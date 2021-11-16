@@ -71,13 +71,7 @@ public class LoadDataService {
 
 	@Value("${partycontact.db.password}")
 	private String partycontactDbPassword;
-    
-	@Value("${partycontact.base.dir}")
-	private String partycontactBaseDir;
-    
-	@Value("${partycontact.load.script}")
-	private String partycontactLoadScript;
-	
+  
 	private Process loadDataProcess;
 	private ExecutorService loadDataExecutor;
 	
@@ -468,42 +462,7 @@ public class LoadDataService {
 		return map;
 	}
 
-	public void loadData() {
 
-		try {
-			if (loadDataProcess == null || !loadDataProcess.isAlive()) {
-				ProcessBuilder builder = new ProcessBuilder();
-				builder.command("sh", "-c", partycontactLoadScript);
-
-				builder.directory(new File(partycontactBaseDir));
-				loadDataProcess = builder.start();
-
-				loadDataExecutor = Executors.newSingleThreadExecutor();
-				loadDataExecutor.submit(new Runnable() {
-
-					@Override
-					public void run() {
-						BufferedReader reader = new BufferedReader(new InputStreamReader(loadDataProcess.getInputStream()));
-						reader.lines().forEach(str -> LOG.info(str));
-					}
-
-				});
-
-				int exitVal = loadDataProcess.waitFor();
-				if (exitVal == 0) {
-					LOG.info(">>> Success!!! Loaddata1 ");
-				} else {
-					LOG.error(">>> Error!!! Loaddata1, exitcode={}", exitVal);
-				}
-			} else {
-				LOG.warn(" >>> loadDataProcess1 is already Running.");
-			}
-		} catch (IOException e) {
-			LOG.error(">>> Error!!!, Loaddata1, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-		} catch (InterruptedException e) {
-			LOG.error(">>> Error!!!, Loaddata1, msg={}, stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-		}
-	}
 	public void stopLoadData() {
 		if (loadDataProcess.isAlive()) {
 			loadDataProcess.destroy();

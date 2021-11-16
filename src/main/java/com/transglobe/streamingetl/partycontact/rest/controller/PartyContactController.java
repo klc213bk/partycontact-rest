@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.transglobe.streamingetl.partycontact.rest.bean.Response;
 import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService;
 
-@RestController
-@RequestMapping("/partycontact")
+//@RestController
+//@RequestMapping("/partycontact")
 public class PartyContactController {
 	static final Logger logger = LoggerFactory.getLogger(PartyContactController.class);
 	

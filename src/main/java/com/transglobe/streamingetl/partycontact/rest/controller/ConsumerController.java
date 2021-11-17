@@ -5,11 +5,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.transglobe.streamingetl.partycontact.rest.bean.KafkaConsumerState;
 import com.transglobe.streamingetl.partycontact.rest.bean.Response;
 import com.transglobe.streamingetl.partycontact.rest.service.ConsumerService;
 
@@ -48,5 +50,20 @@ public class ConsumerController {
 		logger.info(">>>>shutdown finished, span={}", (t1 - t0));
 
 		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
+	
+	@GetMapping(value="/consumerState")
+	@ResponseBody
+	public ResponseEntity<KafkaConsumerState> consumerState() throws Exception{
+		logger.info(">>>>consumerState");
+		long t0 = System.currentTimeMillis();
+		
+		KafkaConsumerState consumerState = consumerService.consumerState();
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>consumerState finished, span={}", (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(consumerState);
 	}
 }

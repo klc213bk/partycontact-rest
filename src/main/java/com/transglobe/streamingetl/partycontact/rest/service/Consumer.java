@@ -84,7 +84,7 @@ public class Consumer implements Runnable {
 		try {
 			consumer.subscribe(topicList);
 
-			logger.info("   >>>>>>>>>>>>>>>>>>>>>>>> run ..........");
+			logger.info("   >>>>>>>>>>>>>>>>>>>>>>>> run ........closed={}",closed.get());
 
 			List<ConsumerRecord<String, String>> buffer = new ArrayList<>();
 			while (!closed.get()) {
@@ -465,6 +465,9 @@ public class Consumer implements Runnable {
 	public void shutdown() {
 		closed.set(true);
 		consumer.wakeup();
+	}
+	public boolean isConsumerClosed() {
+		return closed.get();
 	}
 	private boolean checkSinkExists(Connection sinkConn, Integer roleType, Long listId) throws SQLException {
 		String sql = null;

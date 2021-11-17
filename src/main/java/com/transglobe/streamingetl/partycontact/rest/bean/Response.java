@@ -4,6 +4,8 @@ public class Response {
 
 	private String returnCode;
 
+	public Response() {}
+	
 	public Response(String returnCode) {
 		this.returnCode = returnCode;
 	}

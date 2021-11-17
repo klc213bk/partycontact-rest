@@ -1,7 +1,5 @@
 package com.transglobe.streamingetl.partycontact.rest.service;
 
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -17,7 +15,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.transglobe.streamingetl.partycontact.rest.bean.KafkaConsumerState;
-
 
 
 @Service
@@ -71,16 +68,13 @@ public class ConsumerService {
 	@Value("${topics}")
 	private String topics;
 
-	@Value("${streamingetl.rest.api}")
-	private String streamingetlRestApi;
-
 	private BasicDataSource sinkConnPool;
 	private BasicDataSource sourceConnPool;
 	private BasicDataSource logminerConnPool;
 
-	ExecutorService executor = null;
+	private ExecutorService executor = null;
 
-	List<Consumer> consumers = null;
+	private Consumer consumer = null;
 
 	public void start() throws Exception {
 		LOG.info(">>>>>>>>>>>> start ");
@@ -111,14 +105,9 @@ public class ConsumerService {
 
 		executor = Executors.newFixedThreadPool(1);
 
-		consumers = new ArrayList<>();
 		//		String groupId1 = config.groupId1;
-		Consumer consumer = new Consumer(1, CONSUMER_GROUP_1, bootStrapServers, topicList, sourceConnPool, sinkConnPool, logminerConnPool);
-		consumers.add(consumer);
+		consumer = new Consumer(1, CONSUMER_GROUP_1, bootStrapServers, topicList, sourceConnPool, sinkConnPool, logminerConnPool);
 		executor.submit(consumer);
-
-		LOG.info(">>>>>log consumer running");
-		logComsumerState(KafkaConsumerState.RUNNING);
 
 		LOG.info(">>>>>>>>>>>> started Done!!!");
 
@@ -134,10 +123,8 @@ public class ConsumerService {
 	}
 	public void shutdown() {
 		LOG.info(">>>>>>>>>>>> shutdown ");
-		if (executor != null && consumers != null) {
-			for (Consumer consumer : consumers) {
-				consumer.shutdown();
-			} 
+		if (executor != null && consumer != null) {
+			consumer.shutdown();
 
 			try {
 				if (sourceConnPool != null) sourceConnPool.close();
@@ -159,39 +146,25 @@ public class ConsumerService {
 				}
 
 			}
-			LOG.info(">>>>>log consumer running");
-
-			try {
-				logComsumerState(KafkaConsumerState.STOPPED);
-			} catch (Exception e) {
-				LOG.error(">>> ERROR!!!, msg={}, stacetrace={}",
-						ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-				try {
-					logComsumerState(KafkaConsumerState.ERROR);
-				} catch (Exception e1) {
-					LOG.error(">>> ERROR!!!, msg={}, stacetrace={}",
-							ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-				}
-
-			}
+			
 		}
 
 		LOG.info(">>>>>>>>>>>> shutdown done !!!");
 	}
-	private void logComsumerState(String state) throws Exception{
-
-		String urlStr = String.format("%s/streamingetl/logConsumerState/%s/%s", streamingetlRestApi,streamingEtlName, state);
-		LOG.info(">>>>> connector urlStr:" + urlStr);
-		HttpURLConnection httpConn = null;
-		try {
-			URL url = new URL(urlStr);
-			httpConn = (HttpURLConnection)url.openConnection();
-			httpConn.setRequestMethod("POST");
-			int responseCode = httpConn.getResponseCode();
-			LOG.info(">>>>> logComsumerState  responseCode={}",responseCode);
-
-		} finally {
-			if (httpConn != null ) httpConn.disconnect();
+	public KafkaConsumerState consumerState() throws Exception {
+		LOG.info(">>>>>>>>>>>> consumerState ");
+		KafkaConsumerState consumerState = new KafkaConsumerState(KafkaConsumerState.STOPPED);
+		
+		if (executor != null && !executor.isTerminated() && consumer != null) {
+			
+			if (consumer.isConsumerClosed()) {
+				return new KafkaConsumerState(KafkaConsumerState.STOPPED);
+			} else {
+				return new KafkaConsumerState(KafkaConsumerState.RUNNING);
+			}
 		}
+		
+		return consumerState;
+
 	}
 }

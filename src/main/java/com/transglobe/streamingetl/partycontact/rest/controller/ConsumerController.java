@@ -55,14 +55,13 @@ public class ConsumerController {
 	@GetMapping(value="/consumerState")
 	@ResponseBody
 	public ResponseEntity<KafkaConsumerState> consumerState() throws Exception{
-		logger.info(">>>>consumerState");
 		long t0 = System.currentTimeMillis();
 		
 		KafkaConsumerState consumerState = consumerService.consumerState();
 		
 		long t1 = System.currentTimeMillis();
 		
-		logger.info(">>>>consumerState finished, span={}", (t1 - t0));
+		logger.info(">>>>consumerState finished state={}, span={}", consumerState.getState(), (t1 - t0));
 
 		return ResponseEntity.status(HttpStatus.OK).body(consumerState);
 	}

@@ -217,7 +217,7 @@ public class LoadDataService {
 			List<CompletableFuture<Map<String, String>>> futures = 
 					loadBeanList.stream().map(t -> CompletableFuture.supplyAsync(
 							() -> {
-								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.ADDRESS_ID,a.ROWID,a.ORA_ROWSCN,c.ADDRESS_1 from " 
+								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.ADDRESS_ID,c.ADDRESS_1,'" + t.tableName + "' ROLE_TABLE,a.ORA_ROWSCN ROLE_SCN,a.ROWID ROLE_ROW_ID,c.ORA_ROWSCN ADDR_SCN,c.ROWID ADDR_ROW_ID from " 
 										+ t.tableName 
 										+ " a inner join T_CONTRACT_MASTER b ON a.POLICY_ID=b.POLICY_ID "
 										+ " left join T_ADDRESS c on a.address_id = c.address_id "
@@ -296,7 +296,7 @@ public class LoadDataService {
 			List<CompletableFuture<Map<String, String>>> futures = 
 					loadBeanList.stream().map(t -> CompletableFuture.supplyAsync(
 							() -> {
-								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.ADDRESS_ID,a.ROWID,a.ORA_ROWSCN,c.ADDRESS_1 from " 
+								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.ADDRESS_ID,c.ADDRESS_1,'" + t.tableName + "' ROLE_TABLE,a.ORA_ROWSCN ROLE_SCN,a.ROWID ROLE_ROW_ID,c.ORA_ROWSCN ADDR_SCN,c.ROWID ADDR_ROW_ID from " 
 										+ t.tableName 
 										+ " a inner join T_POLICY_CHANGE b ON a.POLICY_CHG_ID=b.POLICY_CHG_ID "
 										+ " left join T_ADDRESS c on a.address_id = c.address_id "
@@ -346,8 +346,8 @@ public class LoadDataService {
 
 			sinkConn.setAutoCommit(false); 
 			pstmt = sinkConn.prepareStatement(
-					"insert into " + tableNamePartycontact + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
-							+ " values (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?)");
+					"insert into " + tableNamePartycontact + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,ROLE_TABLE,ROLE_SCN,ROLE_ROW_ID,ADDR_SCN,ADDR_ROW_ID) " 
+							+ " values (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?,?,?)");
 
 			while (rs.next()) {
 				count++;
@@ -383,10 +383,14 @@ public class LoadDataService {
 
 				pstmt.setString(9, StringUtils.trim(rs.getString("ADDRESS_1")));
 
-				pstmt.setLong(10, rs.getLong("ORA_ROWSCN"));
+				pstmt.setString(10, rs.getString("ROLE_TABLE"));
 
-				pstmt.setLong(11, rs.getLong("ORA_ROWSCN"));
-				pstmt.setString(12, rs.getString("ROWID"));
+				pstmt.setLong(11, rs.getLong("ROLE_SCN"));
+				pstmt.setString(12, rs.getString("ROLE_ROW_ID"));
+				
+				pstmt.setLong(13, rs.getLong("ADDR_SCN"));
+				pstmt.setString(14, rs.getString("ADDR_ROW_ID"));
+				
 				pstmt.addBatch();
 
 				if (count % BATCH_SIZE == 0) {

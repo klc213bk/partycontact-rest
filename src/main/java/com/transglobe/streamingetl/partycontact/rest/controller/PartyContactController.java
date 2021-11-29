@@ -14,22 +14,50 @@ import org.springframework.web.bind.annotation.RestController;
 import com.transglobe.streamingetl.partycontact.rest.bean.Response;
 import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService;
 
-//@RestController
-//@RequestMapping("/partycontact")
+@RestController
+@RequestMapping("/partycontact")
 public class PartyContactController {
 	static final Logger logger = LoggerFactory.getLogger(PartyContactController.class);
 	
 
-//	@Autowired
+	@Autowired
 	private PartyContactService partyContactService;
 	
+	@PostMapping(value="/runPartyContactLoad")
+	@ResponseBody
+	public ResponseEntity<Response> runPartyContactLoad() throws Exception{
+		logger.info(">>>>runPartyContactLoad");
+		long t0 = System.currentTimeMillis();
+		
+		partyContactService.runPartyContact(true);
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>runPartyContactLoad finished, span={}", (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
+	@PostMapping(value="/runPartyContactNoLoad")
+	@ResponseBody
+	public ResponseEntity<Response> runPartyContactNoLoad() throws Exception{
+		logger.info(">>>>runPartyContactNoLoad");
+		long t0 = System.currentTimeMillis();
+		
+		partyContactService.runPartyContact(false);
+		
+		long t1 = System.currentTimeMillis();
+		
+		logger.info(">>>>runPartyContactNoLoad finished, span={}", (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+	}
 	@PostMapping(value="/createTable")
 	@ResponseBody
-	public ResponseEntity<Response> createPartyContactTable() throws Exception{
+	public ResponseEntity<Response> createTable() throws Exception{
 		logger.info(">>>>createTable");
 		long t0 = System.currentTimeMillis();
 		
-		partyContactService.createPartyContactTable();
+		partyContactService.createTable();
 		
 		long t1 = System.currentTimeMillis();
 		
@@ -39,11 +67,11 @@ public class PartyContactController {
 	}
 	@PostMapping(value="/dropTable")
 	@ResponseBody
-	public ResponseEntity<Response> dropPartyContactTable() throws Exception{
+	public ResponseEntity<Response> dropTable() throws Exception{
 		logger.info(">>>>dropTable");
 		long t0 = System.currentTimeMillis();
 		
-		partyContactService.dropPartyContactTable();
+		partyContactService.dropTable();
 		
 		long t1 = System.currentTimeMillis();
 		
@@ -51,13 +79,13 @@ public class PartyContactController {
 
 		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
 	}
-	@PostMapping(value="/truncateTable")
+	@PostMapping(value="/truncateTable/{table}")
 	@ResponseBody
-	public ResponseEntity<Response> truncatePartyContactTable() throws Exception{
+	public ResponseEntity<Response> truncateTable(@PathVariable("table") String table) throws Exception{
 		logger.info(">>>>truncateTable");
 		long t0 = System.currentTimeMillis();
 		
-		partyContactService.truncatePartyContactTable();
+		partyContactService.truncateTable(table);
 		
 		long t1 = System.currentTimeMillis();
 		

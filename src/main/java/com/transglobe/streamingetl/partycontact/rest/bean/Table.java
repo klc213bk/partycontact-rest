@@ -16,7 +16,7 @@ public class Table {
 	public static String T_PARTY_CONTACT = "T_PARTY_CONTACT"; 
 	
 	// streamingetl table
-	public static String STREAMING_ETL = "STREAMING_ETL";
-	public static String LOGMINER_HEARTBEAT = "LOGMINER_HEARTBEAT";
-	public static String STREAMING_HEALTH = "STREAMING_HEALTH";
+//	public static String STREAMING_ETL = "STREAMING_ETL";
+//	public static String LOGMINER_HEARTBEAT = "LOGMINER_HEARTBEAT";
+//	public static String STREAMING_HEALTH = "STREAMING_HEALTH";
 }

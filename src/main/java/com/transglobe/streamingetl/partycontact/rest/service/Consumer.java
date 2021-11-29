@@ -1,5 +1,9 @@
-                                                             package com.transglobe.streamingetl.partycontact.rest.service;
+package com.transglobe.streamingetl.partycontact.rest.service;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -36,6 +40,9 @@ import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 public class Consumer implements Runnable {
 	static final Logger logger = LoggerFactory.getLogger(Consumer.class);
 
+	private static final String URL_UPDATE_HEALTH_CPONSUMER_RECEIVED = "http://localhost:9100/streamingetl/updateHealthConsumerReceived";
+	private static final String HEARTBEAT_TABLE = "HE_HEARTBEAT";
+
 	private static final Integer POLICY_HOLDER_ROLE_TYPE = 1;
 	private static final Integer INSURED_LIST_ROLE_TYPE = 2;
 	private static final Integer CONTRACT_BENE_ROLE_TYPE = 3;
@@ -48,9 +55,9 @@ public class Consumer implements Runnable {
 	private BasicDataSource logminerConnPool;
 
 	private String clientId;
-	
+
 	private List<String> topicList;
-	
+
 	public Consumer(int id,
 			String groupId,  
 			String bootstrapServers,
@@ -64,7 +71,7 @@ public class Consumer implements Runnable {
 		this.logminerConnPool = logminerConnPool;
 		this.clientId = groupId + "-" + id;
 		this.topicList = topicList;
-		
+
 		Properties props = new Properties();
 		props.put("bootstrap.servers", bootstrapServers);
 		props.put("group.id", groupId);
@@ -221,7 +228,7 @@ public class Consumer implements Runnable {
 						|| StringUtils.equals(Table.T_INSURED_LIST_LOG, tableName)
 						|| StringUtils.equals(Table.T_CONTRACT_BENE_LOG, tableName) ) {
 					isTlogtable = true;
-				} else if (StringUtils.equals(Table.LOGMINER_HEARTBEAT, tableName)) {
+				} else if (StringUtils.equals(HEARTBEAT_TABLE, tableName)) {
 					isHeartbeatTable = true;
 				}
 
@@ -288,14 +295,14 @@ public class Consumer implements Runnable {
 						// do  同步(Insert/Update/Delete)
 						if ("INSERT".equals(operation)) {
 							logger.info("   >>>insert ...");
-							insertPartyContact(sourceConn, sinkConn, partyContact, scn, commitScn, rowId);
+							insertPartyContact(sourceConn, sinkConn, partyContact, tableName, scn, commitScn, rowId);
 						} else if ("UPDATE".equals(operation)) {
 							if (partyContact.equals(beforePartyContact)) {
 								// ignore
 								logger.info("   >>>ignore, equal ...");
 							} else {
 								logger.info("   >>>update ...");
-								updatePartyContact(sourceConn, sinkConn, partyContact, scn, commitScn, rowId);
+								updatePartyContact(sourceConn, sinkConn, partyContact, tableName, scn, commitScn, rowId);
 							}
 						} else if ("DELETE".equals(operation)) {
 							logger.info("   >>>delete ...");
@@ -318,10 +325,10 @@ public class Consumer implements Runnable {
 						boolean exists = checkSinkExists(sinkConn, roleType, listId);
 						if (exists) {
 							logger.info("   >>>ignite list_id exist, update ...");
-							updatePartyContact(sourceConn, sinkConn, partyContact, scn, commitScn, rowId);
+							updatePartyContact(sourceConn, sinkConn, partyContact, tableName, scn, commitScn, rowId);
 						} else {
 							logger.info("   >>> ignite list_id does not exist, insert ...");
-							insertPartyContact(sourceConn, sinkConn, partyContact, scn, commitScn, rowId);
+							insertPartyContact(sourceConn, sinkConn, partyContact, tableName, scn, commitScn, rowId);
 						}
 					} else if (StringUtils.equals("N", lastCmtFlg)) {
 						int policyChgStatus = getPolicyChangeStatus(sourceConn, policyChgId);
@@ -356,7 +363,7 @@ public class Consumer implements Runnable {
 
 					if ("INSERT".equals(operation)) {
 						logger.info("   >>>insert ...");
-						insertAddress(sinkConn, address);
+						insertAddress(sinkConn, address, scn, commitScn, rowId);
 					} else if ("UPDATE".equals(operation)) {
 
 						if (address.equals(beforeAddress)) {
@@ -364,7 +371,7 @@ public class Consumer implements Runnable {
 							logger.info("   >>>ignore, equal ...");
 						} else {
 							logger.info("   >>>update ...");
-							updateAddress(sinkConn, beforeAddress, address);
+							updateAddress(sinkConn, beforeAddress, address, scn, commitScn, rowId);
 						}	
 
 					} else if ("DELETE".equals(operation)) {
@@ -376,19 +383,14 @@ public class Consumer implements Runnable {
 					JsonNode payLoadData = payload.get("data");
 					long hartBeatTimeMs = Long.valueOf(payLoadData.get("HEARTBEAT_TIME").asText());
 					Timestamp heartbeatTime = new Timestamp(hartBeatTimeMs);
-					
+
 					logminerConn = logminerConnPool.getConnection();
 					String sql = null;
 					PreparedStatement pstmt = null;
-					
+
 					try {
-						sql = "update " + Table.STREAMING_HEALTH 
-								+ " set CONSUMER_RECEIVED=?,CONSUMER_CLIENT=(CONSUMER_CLIENT || ? || ',') where HEARTBEAT_TIME = ?";
-						pstmt = logminerConn.prepareStatement(sql);
-						pstmt.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
-						pstmt.setString(2, clientId);
-						pstmt.setTimestamp(3, heartbeatTime);
-						pstmt.executeUpdate();
+						
+						updateHealthConsumerReceived(clientId, heartbeatTime);
 						
 					}
 					finally {
@@ -492,7 +494,7 @@ public class Consumer implements Runnable {
 		}
 		return exists;
 	}
-	
+
 	private boolean checkExists(Connection sourceConn, Integer roleType, Long listId) throws SQLException {
 		String sql = null;
 		PreparedStatement pstmt = null;
@@ -586,7 +588,7 @@ public class Consumer implements Runnable {
 		return address1;
 	}
 
-	private void insertPartyContact(Connection sourceConn, Connection sinkConn, PartyContact partyContact, Long scn, Long commitScn, String rowId) throws Exception  {
+	private void insertPartyContact(Connection sourceConn, Connection sinkConn, PartyContact partyContact, String tableName, Long scn, Long commitScn, String rowId) throws Exception  {
 		PreparedStatement pstmt = null;
 		try {
 			String sql = "select count(*) AS COUNT from " + Table.T_PARTY_CONTACT 
@@ -595,8 +597,8 @@ public class Consumer implements Runnable {
 			if (count == 0) {
 				long t = System.currentTimeMillis();
 				if (partyContact.getAddressId() == null) {
-					sql = "insert into " + Table.T_PARTY_CONTACT + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
-							+ " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+					sql = "insert into " + Table.T_PARTY_CONTACT + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,ROLE_TABLE,ROLE_SCN,ROLE_COMMIT_SCN,ROLE_ROW_ID) " 
+							+ " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 					pstmt = sinkConn.prepareStatement(sql);
 					pstmt.setInt(1, partyContact.getRoleType());
 					pstmt.setLong(2, partyContact.getListId());
@@ -613,10 +615,10 @@ public class Consumer implements Runnable {
 					pstmt.setNull(9, Types.VARCHAR);
 					pstmt.setTimestamp(10, new Timestamp(t));
 					pstmt.setTimestamp(11, new Timestamp(t));
-
-					pstmt.setLong(12, scn);
-					pstmt.setLong(13, commitScn);
-					pstmt.setString(14, rowId);
+					pstmt.setString(12, tableName);
+					pstmt.setLong(13, scn);
+					pstmt.setLong(14, commitScn);
+					pstmt.setString(15, rowId);
 
 					pstmt.executeUpdate();
 					pstmt.close();
@@ -662,7 +664,7 @@ public class Consumer implements Runnable {
 			if (pstmt != null) pstmt.close();
 		}
 	}
-	private void updatePartyContact(Connection sourceConn, Connection sinkConn, PartyContact partyContact, Long scn, Long commitScn, String rowId) throws Exception  {
+	private void updatePartyContact(Connection sourceConn, Connection sinkConn, PartyContact partyContact, String tableName, Long scn, Long commitScn, String rowId) throws Exception  {
 		PreparedStatement pstmt = null;
 		ResultSet rs = null;
 		try {
@@ -686,7 +688,7 @@ public class Consumer implements Runnable {
 			if (exists) {
 				if (partyContact.getAddressId() == null) {
 					sql = "update " + Table.T_PARTY_CONTACT
-							+ " set POLICY_ID=?,NAME=?,CERTI_CODE=?,MOBILE_TEL=?,EMAIL=?,ADDRESS_ID=null,ADDRESS_1=null,UPDATE_TIMESTAMP=?,SCN=?,COMMIT_SCN=?,ROW_ID=?"
+							+ " set POLICY_ID=?,NAME=?,CERTI_CODE=?,MOBILE_TEL=?,EMAIL=?,ADDRESS_ID=null,ADDRESS_1=null,UPDATE_TIMESTAMP=?,ROLE_TABLE=?,ROLE_SCN=?,ROLE_COMMIT_SCN=?,ROLE_ROW_ID=?"
 							+ " where ROLE_TYPE=? and LIST_ID=?";
 					pstmt = sinkConn.prepareStatement(sql);
 					pstmt.setLong(1, partyContact.getPolicyId());
@@ -695,9 +697,10 @@ public class Consumer implements Runnable {
 					pstmt.setString(4, partyContact.getMobileTel());
 					pstmt.setString(5, partyContact.getEmail());
 					pstmt.setTimestamp(6, new Timestamp(t));
-					pstmt.setLong(7, scn);
-					pstmt.setLong(8, commitScn);
-					pstmt.setString(9, rowId);
+					pstmt.setString(7, tableName);
+					pstmt.setLong(8, scn);
+					pstmt.setLong(9, commitScn);
+					pstmt.setString(10, rowId);
 
 					pstmt.setInt(10, partyContact.getRoleType());
 					pstmt.setLong(11, partyContact.getListId());
@@ -798,7 +801,7 @@ public class Consumer implements Runnable {
 			if (pstmt != null) pstmt.close();
 		}
 	}
-	private void insertAddress(Connection sinkConn, Address address) throws Exception {
+	private void insertAddress(Connection sinkConn, Address address, Long scn, Long commitScn, String rowId) throws Exception {
 
 		String sql = null;
 		ResultSet rs = null;
@@ -822,11 +825,14 @@ public class Consumer implements Runnable {
 			} else {
 				long t = System.currentTimeMillis();
 				// update party contact
-				sql = "update "  + Table.T_PARTY_CONTACT + " set address_1 = ?,UPDATE_TIMESTAMP=? where address_id = ?";
+				sql = "update "  + Table.T_PARTY_CONTACT + " set address_1 = ?,UPDATE_TIMESTAMP=?, ADDR_SCN=?, ADDR_COMMIT_SCN=?, ADDR_ROW_ID=? where address_id = ?";
 				pstmt = sinkConn.prepareStatement(sql);
 				pstmt.setString(1, StringUtils.trim(address.getAddress1()));
 				pstmt.setTimestamp(2, new Timestamp(t));
-				pstmt.setLong(3, address.getAddressId());
+				pstmt.setLong(3, scn);
+				pstmt.setLong(4, commitScn);
+				pstmt.setString(5, rowId);
+				pstmt.setLong(6, address.getAddressId());
 				pstmt.executeUpdate();
 				pstmt.close();
 			}
@@ -852,7 +858,7 @@ public class Consumer implements Runnable {
 		return count;
 	}
 
-	private void updateAddress(Connection conn, Address oldAddress, Address newAddress) throws Exception  {
+	private void updateAddress(Connection conn, Address oldAddress, Address newAddress, Long scn, Long commitScn, String rowId) throws Exception  {
 
 		PreparedStatement pstmt = null;
 		String sql = "";
@@ -860,11 +866,14 @@ public class Consumer implements Runnable {
 			long t = System.currentTimeMillis();
 			// update PartyContact
 			sql = "update " + Table.T_PARTY_CONTACT
-					+ " set ADDRESS_1 = ?,UPDATE_TIMESTAMP=? where ADDRESS_ID = ?";
+					+ " set ADDRESS_1 = ?,UPDATE_TIMESTAMP=?, ADDR_SCN=?, ADDR_COMMIT_SCN=?, ADDR_ROW_ID=? where ADDRESS_ID = ?";
 			pstmt = conn.prepareStatement(sql);
 			pstmt.setString(1, StringUtils.trim(newAddress.getAddress1()));
 			pstmt.setTimestamp(2, new Timestamp(t));
-			pstmt.setLong(3, oldAddress.getAddressId());
+			pstmt.setLong(3, scn);
+			pstmt.setLong(4, commitScn);
+			pstmt.setString(5, rowId);
+			pstmt.setLong(6, oldAddress.getAddressId());
 
 			pstmt.executeUpdate();
 			pstmt.close();
@@ -894,5 +903,34 @@ public class Consumer implements Runnable {
 			if (pstmt != null) pstmt.close();
 		}
 	}
+	private void updateHealthConsumerReceived(String clientId, Timestamp received) throws Exception{
+		String urlStr = String.format("%s/%s/%d", URL_UPDATE_HEALTH_CPONSUMER_RECEIVED, clientId, received.getTime());
+		logger.info(">>>>> updateHealthConsumerReceived  urlStr:" + urlStr);
 
+		HttpURLConnection httpCon = null;
+		try {
+			URL url = new URL(urlStr);
+			httpCon = (HttpURLConnection)url.openConnection();
+			httpCon.setRequestMethod("POST");
+			int responseCode = httpCon.getResponseCode();
+			String readLine = null;
+			if (httpCon.HTTP_OK == responseCode) {
+				BufferedReader in = new BufferedReader(new InputStreamReader(httpCon.getInputStream()));
+				StringBuffer response = new StringBuffer();
+				while ((readLine = in.readLine()) != null) {
+					response.append(readLine);
+				}
+				in.close();
+
+			} else {
+				logger.error(">>> Response code={}", responseCode);
+				throw new Exception("Response code="+responseCode);
+			}
+		} catch(Exception e) {
+			logger.error(">>> Response code={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+			throw e;
+		} finally {
+			if (httpCon != null ) httpCon.disconnect();
+		}
+	}
 }

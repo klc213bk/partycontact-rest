@@ -1,8 +1,12 @@
 package com.transglobe.streamingetl.partycontact.rest.service;
 
+import java.io.BufferedReader;
 import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -10,6 +14,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,7 +35,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTableEnum;
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
+
 
 
 @Service
@@ -41,75 +49,115 @@ public class PartyContactService {
 
 	private static final int BATCH_SIZE = 3000;
 
-//	@Value("${table.name.partycontact}")
-	private String tableNamePartycontact;
+	@Value("{streaming.etl.host}")
+	private String streamingEtlHost;
+
+	@Value("{streaming.etl.port}")
+	private String streamingEtlPort;
+
+	@Value("{streaming.etl.name}")
+	private String streamingEtlName;
+
+	//	@Value("${table.name.partycontact}")
+//	private String tableNamePartycontact;
 
 //	@Value("${table.create.file.party_contact}")
-	private String tableCreateFilePartycontact;
+//	private String tableCreateFilePartycontact;
 
-//	@Value("${source.db.driver}")
+	//	@Value("${source.db.driver}")
 	private String sourceDbDriver;
 
-//	@Value("${source.db.url}")
+	//	@Value("${source.db.url}")
 	private String sourceDbUrl;
 
-//	@Value("${source.db.username}")
+	//	@Value("${source.db.username}")
 	private String sourceDbUsername;
 
-//	@Value("${source.db.password}")
+	//	@Value("${source.db.password}")
 	private String sourceDbPassword;
 
-//	@Value("${partycontact.db.driver}")
-	private String partycontactDbDriver;
+	@Value("${sink.db.driver}")
+	private String sinkDbDriver;
 
-//	@Value("${partycontact.db.url}")
+	@Value("${sink.db.url}")
 	private String partycontactDbUrl;
 
-//	@Value("${partycontact.db.username}")
-	private String partycontactDbUsername;
+	@Value("${sink.db.username}")
+	private String sinkDbUsername;
 
-//	@Value("${partycontact.db.password}")
-	private String partycontactDbPassword;
+	@Value("${sink.db.password}")
+	private String sinkDbPassword;
 
-	public void createPartyContactTable() throws Exception {
-		LOG.info(">>>>>>>>>>>> createPartyContactTable ");
+	public void runPartyContact(boolean loadData) throws Exception {
+		LOG.info(">>>>>>>>>>>> runPartyContact ");
 
-		Connection conn = null;
-		PreparedStatement pstmt = null;
+		// new ETL state
+		String urlStr = String.format("http://%s:%d/insertEtlState/{etlName}", streamingEtlHost, Integer.valueOf(streamingEtlPort), streamingEtlName);
+		HttpURLConnection httpConn = null;
 		try {
+			URL url = new URL(urlStr);
+			httpConn = (HttpURLConnection)url.openConnection();
+			httpConn.setRequestMethod("POST");
+			int responseCode = httpConn.getResponseCode();
 
-			LOG.info(">>>>>> create table File={} ",tableCreateFilePartycontact);
+			BufferedReader in = new BufferedReader(new InputStreamReader(httpConn.getInputStream()));
+			StringBuffer response = new StringBuffer();
+			String readLine = null;
+			while ((readLine = in.readLine()) != null) {
+				response.append(readLine);
+			}
+			in.close();
 
-			Class.forName(partycontactDbDriver);
-			conn = DriverManager.getConnection(partycontactDbUrl, partycontactDbUsername, partycontactDbPassword);
+			LOG.info(">>>>> insertEtlState responsecode={}", responseCode);
 
-			executeSqlScriptFile(conn, tableCreateFilePartycontact);
-
-			LOG.info(">>>>>>>>>>>> createPartyContactTable Done!!!");
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
 		} finally {
-			if (pstmt != null) pstmt.close();
-			if (conn != null) conn.close();
+			if (httpConn != null ) httpConn.disconnect();
 		}
+
+
+		//apply logminer sync tables and restart logminer
+
+		if (loadData) {
+			// load data
+
+
+		} 
+
+		// get max scn from sink data
+
+
+
+		// run consumer
 	}
-	public void dropPartyContactTable() throws Exception {
-		LOG.info(">>>>>>>>>>>> dropPartyContactTable ");
+	public void createTable() throws Exception {
+		LOG.info(">>>>>>>>>>>> createTable ");
 
-		executeScript("DROP TABLE " + tableNamePartycontact);
-
-		LOG.info(">>>>>>>>>>>> dropPartyContactTable Done!!!");
-
+		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+			if (tableExists(e.getTableName())) {
+				LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
+				executeScript("DROP TABLE " + e.getTableName());
+			} 
+			executeSqlScriptFromFile(e.getScriptFile());
+		}
+		
+	
+	}
+	public void dropTable() throws Exception {
+		LOG.info(">>>>>>>>>>>> drop Table ");
+		
+		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+			if (tableExists(e.getTableName())) {
+				LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
+				executeScript("DROP TABLE " + e.getTableName());
+			} 
+		}
+		
 	}
 
-	public void truncatePartyContactTable() throws Exception {
-		LOG.info(">>>>>>>>>>>> truncatePartyContactTable ");
+	public void truncateTable(String table) throws Exception {
+		LOG.info(">>>>>>>>>>>> truncateTable ");
 
-		executeScript("TRUNCATE TABLE " + tableNamePartycontact);
+		executeScript("TRUNCATE TABLE " + table);
 
 		LOG.info(">>>>>>>>>>>> truncatePartyContactTable Done!!!");
 	}
@@ -129,9 +177,9 @@ public class PartyContactService {
 
 			sinkConnectionPool = new BasicDataSource();
 			sinkConnectionPool.setUrl(partycontactDbUrl);
-			sinkConnectionPool.setDriverClassName(partycontactDbDriver);
-			sinkConnectionPool.setUsername(partycontactDbUsername);
-			sinkConnectionPool.setPassword(partycontactDbPassword);
+			sinkConnectionPool.setDriverClassName(sinkDbDriver);
+			sinkConnectionPool.setUsername(sinkDbUsername);
+			sinkConnectionPool.setPassword(sinkDbPassword);
 			sinkConnectionPool.setMaxTotal(THREADS);
 
 			if ("T_POLICY_HOLDER".equalsIgnoreCase(table)) {
@@ -170,8 +218,8 @@ public class PartyContactService {
 	public void addPrimaryKey() throws Exception {
 		LOG.info(">>>>>>>>>>>> addPrimaryKey ");
 
-		executeScript("ALTER TABLE  " + tableNamePartycontact + " ADD CONSTRAINT PK_T_PARTY_CONTACT PRIMARY KEY (ROLE_TYPE,LIST_ID)");
-		
+		executeScript("ALTER TABLE  " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " ADD CONSTRAINT PK_T_PARTY_CONTACT PRIMARY KEY (ROLE_TYPE,LIST_ID)");
+
 		LOG.info(">>>>>>>>>>>> addPrimaryKey done!!! ");
 	}
 
@@ -179,25 +227,25 @@ public class PartyContactService {
 		LOG.info(">>>>>>>>>>>> createIndexes ");
 
 		if ("ADDRESS_1".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + tableNamePartycontact + " (ADDRESS_1)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDRESS_1)");
 			LOG.info(">>>>>>>>>>>> 1/7 createIndex for addr1 done!!! ");
 		} else if ("EMAIL".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + tableNamePartycontact + " (EMAIL)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (EMAIL)");
 			LOG.info(">>>>>>>>>>>> 2/7 createIndex for email done!!! ");
 		}  else if ("MOBILE_TEL".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + tableNamePartycontact + " (MOBILE_TEL)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (MOBILE_TEL)");
 			LOG.info(">>>>>>>>>>>> 3/7 createIndex for mobile_tel done!!! ");
 		} else if ("CERTI_CODE".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + tableNamePartycontact + " (CERTI_CODE)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (CERTI_CODE)");
 			LOG.info(">>>>>>>>>>>> 4/7 createIndex for certi_code done!!! ");
 		} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + tableNamePartycontact + " (POLICY_ID)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (POLICY_ID)");
 			LOG.info(">>>>>>>>>>>> 5/7 createIndex for policy_id done!!! ");
 		} else if ("UPDATE_TIME".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TIME ON " + tableNamePartycontact + " (UPDATE_TIME)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TIME ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (UPDATE_TIME)");
 			LOG.info(">>>>>>>>>>>> 6/7 createIndex for update_time done!!! ");
 		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + tableNamePartycontact + " (UPDATE_TIMESTAMP)");
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (UPDATE_TIMESTAMP)");
 			LOG.info(">>>>>>>>>>>> 7/7 createIndex for update_timestamp done!!! ");
 		} else {
 			throw new Exception("Invalid Column Name:" + columnName);
@@ -383,7 +431,7 @@ public class PartyContactService {
 
 			sinkConn.setAutoCommit(false); 
 			pstmt = sinkConn.prepareStatement(
-					"insert into " + tableNamePartycontact + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,UPDATE_TIME,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
+					"insert into " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,UPDATE_TIME,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
 							+ " values (?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?)");
 
 			while (rs.next()) {
@@ -457,7 +505,7 @@ public class PartyContactService {
 			LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
 			map.put("RETURN_CODE", "-999");
 			map.put("SQL", sql);
-			map.put("SINK_TABLE", tableNamePartycontact);
+			map.put("SINK_TABLE", PartyContactTableEnum.T_PARTY_CONTACT.getTableName());
 			map.put("ERROR_MSG", e.getMessage());
 			map.put("STACK_TRACE", ExceptionUtils.getStackTrace(e));
 		} finally {
@@ -505,8 +553,8 @@ public class PartyContactService {
 		Statement stmt = null;
 		try {
 
-			Class.forName(partycontactDbDriver);
-			conn = DriverManager.getConnection(partycontactDbUrl, partycontactDbUsername, partycontactDbPassword);
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(partycontactDbUrl, sinkDbUsername, sinkDbPassword);
 
 			stmt = conn.createStatement();
 			stmt.executeUpdate(script);
@@ -523,19 +571,77 @@ public class PartyContactService {
 		}
 
 	}
-	private void executeSqlScriptFile(Connection conn, String sqlScriptFile) throws Exception {
+	public void executeSqlScriptFromFile(String file) throws Exception {
+		LOG.info(">>>>>>>>>>>> executeSqlScriptFromFile file={}", file);
 
-		Statement stmt = null;
+		Connection conn = null;
+		PreparedStatement pstmt = null;
+		try {
 
-		try (InputStream inputStream = new ClassPathResource(sqlScriptFile).getInputStream()) {
-			String createTableScript = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
-			stmt = conn.createStatement();
-			stmt.executeUpdate(createTableScript);
-		} catch (SQLException | IOException e) {
-			if (stmt != null) stmt.close();
-			throw e;
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(partycontactDbUrl, sinkDbUsername, sinkDbPassword);
+
+			Statement stmt = null;
+			ClassLoader loader = Thread.currentThread().getContextClassLoader();	
+			try (InputStream inputStream = loader.getResourceAsStream(file)) {
+				String createScript = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+				stmt = conn.createStatement();
+				stmt.executeUpdate(createScript);
+			} catch (SQLException | IOException e) {
+				if (stmt != null) stmt.close();
+				throw e;
+			}
+
+			LOG.info(">>>>>>>>>>>> executeSqlScriptFromFile Done!!!");
+
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (pstmt != null) pstmt.close();
+			if (conn != null) conn.close();
 		}
-
 	}
+	public boolean tableExists(String table) throws Exception {
 
+		Connection conn = null;
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
+		String sql = null;
+		boolean exists = false;
+		try {
+
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(partycontactDbUrl, sinkDbUsername, sinkDbPassword);
+
+			sql = "select count(*) CNT from USER_TABLES where TABLE_NAME = ?";
+			pstmt = conn.prepareStatement(sql);
+			pstmt.setString(1, table);
+			rs = pstmt.executeQuery();
+			int cnt = 0;
+			while (rs.next()) {
+				cnt = rs.getInt("CNT");
+			}
+			rs.close();
+			pstmt.close();
+
+			if (cnt > 0) {
+				exists = true;
+			}
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (rs != null) rs.close();
+			if (pstmt != null) pstmt.close();
+			if (conn != null) conn.close();
+		}
+		return exists;
+	}
 }

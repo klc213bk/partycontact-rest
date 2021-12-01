@@ -1,5 +1,6 @@
 package com.transglobe.streamingetl.partycontact.rest.controller;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,122 +19,167 @@ import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService
 @RequestMapping("/partycontact")
 public class PartyContactController {
 	static final Logger logger = LoggerFactory.getLogger(PartyContactController.class);
-	
+
 
 	@Autowired
 	private PartyContactService partyContactService;
-	
-	@PostMapping(value="/runPartyContactLoad")
-	@ResponseBody
-	public ResponseEntity<Response> runPartyContactLoad() throws Exception{
-		logger.info(">>>>runPartyContactLoad");
-		long t0 = System.currentTimeMillis();
-		
-		partyContactService.runPartyContact(true);
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>runPartyContactLoad finished, span={}", (t1 - t0));
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
-	}
-	@PostMapping(value="/runPartyContactNoLoad")
-	@ResponseBody
-	public ResponseEntity<Response> runPartyContactNoLoad() throws Exception{
-		logger.info(">>>>runPartyContactNoLoad");
-		long t0 = System.currentTimeMillis();
-		
-		partyContactService.runPartyContact(false);
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>runPartyContactNoLoad finished, span={}", (t1 - t0));
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
-	}
 	@PostMapping(value="/createTable")
 	@ResponseBody
 	public ResponseEntity<Response> createTable() throws Exception{
 		logger.info(">>>>createTable");
 		long t0 = System.currentTimeMillis();
-		
-		partyContactService.createTable();
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>createTable finished, span={}", (t1 - t0));
+		String errMsg = null;
+		String returnCode = "0000";
+		try {
+			partyContactService.createTable();
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
+
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>createTable finished returnCode={}, span={}", returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
 	}
 	@PostMapping(value="/dropTable")
 	@ResponseBody
 	public ResponseEntity<Response> dropTable() throws Exception{
 		logger.info(">>>>dropTable");
 		long t0 = System.currentTimeMillis();
-		
-		partyContactService.dropTable();
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>dropTable finished, span={}", (t1 - t0));
+		String errMsg = null;
+		String returnCode = "0000";
+		try {
+			partyContactService.dropTable();
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
+
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>dropTable finished returnCode={}, span={}", returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
 	}
 	@PostMapping(value="/truncateTable/{table}")
 	@ResponseBody
 	public ResponseEntity<Response> truncateTable(@PathVariable("table") String table) throws Exception{
 		logger.info(">>>>truncateTable");
 		long t0 = System.currentTimeMillis();
-		
-		partyContactService.truncateTable(table);
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>truncateTable finished, span={}", (t1 - t0));
+		String errMsg = null;
+		String returnCode = "0000";
+		try {
+			partyContactService.truncateTable(table);
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>truncateTable finished returnCode={}, span={}", returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
 	}
 	@PostMapping(value="/loadData/{table}")
 	@ResponseBody
 	public ResponseEntity<Response> loadData(@PathVariable("table") String table) throws Exception{
 		logger.info(">>>>loadData {}", table);
 		long t0 = System.currentTimeMillis();
-		
-		partyContactService.loadTable(table);
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>loadData {} finished, span={}", table, (t1 - t0));
+		String errMsg = null;
+		String returnCode = "0000";
+		try {
+			partyContactService.loadTable(table);
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>loadData finished returnCode={}, span={}", returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
+	}
+	@PostMapping(value="/loadAllData")
+	@ResponseBody
+	public ResponseEntity<Response> loadAllData() throws Exception{
+		logger.info(">>>>loadAllData ");
+		long t0 = System.currentTimeMillis();
+		String errMsg = null;
+		String returnCode = "0000";
+		Long count = 0L;
+		try {
+
+			count = partyContactService.loadAllData();
+
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
+
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>loadAllData finished count={}, returnCode={}, span={}", count, returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
 	}
 	@PostMapping(value="/addPrimaryKey")
 	@ResponseBody
 	public ResponseEntity<Response> addPrimaryKey() throws Exception{
 		logger.info(">>>>addPrimaryKey ");
 		long t0 = System.currentTimeMillis();
-		
-		partyContactService.addPrimaryKey();
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>addPrimaryKey finished, span={}", (t1 - t0));
+		String errMsg = null;
+		String returnCode = "0000";
+		try {
+			partyContactService.addPrimaryKey();
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
+
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>addPrimaryKey finished returnCode={}, span={}", returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
 	}
 	@PostMapping(value="/createIndex/{columnName}")
 	@ResponseBody
 	public ResponseEntity<Response> createIndex(@PathVariable("columnName") String columnName) throws Exception{
 		logger.info(">>>>createIndex ");
 		long t0 = System.currentTimeMillis();
-		
-		partyContactService.createIndex(columnName);
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>createIndex finished, span={}", (t1 - t0));
+		String errMsg = null;
+		String returnCode = "0000";
+		try {
+			partyContactService.createIndex(columnName);
 
-		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
+
+		} catch (Exception e) {
+			returnCode = "-9999";
+			errMsg = ExceptionUtils.getMessage(e);
+			logger.error(">>>errMsg:{}, stacktrace={}", errMsg, ExceptionUtils.getStackTrace(e));
+		}
+
+		long t1 = System.currentTimeMillis();
+
+		logger.info(">>>>createIndex finished returnCode={}, span={}", returnCode, (t1 - t0));
+
+		return ResponseEntity.status(HttpStatus.OK).body(new Response(returnCode, errMsg));
 	}
 
 

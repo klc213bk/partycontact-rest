@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -35,13 +36,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.transglobe.streamingetl.partycontact.rest.bean.Address;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContact;
+import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactETL;
 import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 
 public class Consumer implements Runnable {
 	static final Logger logger = LoggerFactory.getLogger(Consumer.class);
 
-	private static final String URL_UPDATE_HEALTH_CPONSUMER_RECEIVED = "http://localhost:9100/streamingetl/updateHealthConsumerReceived";
-	private static final String HEARTBEAT_TABLE = "HE_HEARTBEAT";
+	private static final String TABLE_HE_HEARTBEAT = "HE_HEARTBEAT";
 
 	private static final Integer POLICY_HOLDER_ROLE_TYPE = 1;
 	private static final Integer INSURED_LIST_ROLE_TYPE = 2;
@@ -228,7 +229,7 @@ public class Consumer implements Runnable {
 						|| StringUtils.equals(Table.T_INSURED_LIST_LOG, tableName)
 						|| StringUtils.equals(Table.T_CONTRACT_BENE_LOG, tableName) ) {
 					isTlogtable = true;
-				} else if (StringUtils.equals(HEARTBEAT_TABLE, tableName)) {
+				} else if (StringUtils.equals(TABLE_HE_HEARTBEAT, tableName)) {
 					isHeartbeatTable = true;
 				}
 
@@ -385,16 +386,10 @@ public class Consumer implements Runnable {
 					Timestamp heartbeatTime = new Timestamp(hartBeatTimeMs);
 
 					logminerConn = logminerConnPool.getConnection();
-					String sql = null;
-					PreparedStatement pstmt = null;
-
 					try {
-						
-						updateHealthConsumerReceived(clientId, heartbeatTime);
-						
+						updateHealthConsumerReceived(logminerConn, clientId, heartbeatTime);
 					}
 					finally {
-						if (pstmt != null) pstmt.close();
 						if (logminerConn != null) logminerConn.close();
 					}
 				} else {
@@ -903,34 +898,44 @@ public class Consumer implements Runnable {
 			if (pstmt != null) pstmt.close();
 		}
 	}
-	private void updateHealthConsumerReceived(String clientId, Timestamp received) throws Exception{
-		String urlStr = String.format("%s/%s/%d", URL_UPDATE_HEALTH_CPONSUMER_RECEIVED, clientId, received.getTime());
-		logger.info(">>>>> updateHealthConsumerReceived  urlStr:" + urlStr);
+	private void updateHealthConsumerReceived(Connection conn, String clientId, Timestamp heartbeatTime) throws Exception{
+		logger.info(">>>>> updateHealthConsumerReceived  clientId:{}, received={}" , clientId, heartbeatTime);
 
-		HttpURLConnection httpCon = null;
+		CallableStatement cstmt = null;
+//		HttpURLConnection httpCon = null;
 		try {
-			URL url = new URL(urlStr);
-			httpCon = (HttpURLConnection)url.openConnection();
-			httpCon.setRequestMethod("POST");
-			int responseCode = httpCon.getResponseCode();
-			String readLine = null;
-			if (httpCon.HTTP_OK == responseCode) {
-				BufferedReader in = new BufferedReader(new InputStreamReader(httpCon.getInputStream()));
-				StringBuffer response = new StringBuffer();
-				while ((readLine = in.readLine()) != null) {
-					response.append(readLine);
-				}
-				in.close();
-
-			} else {
-				logger.error(">>> Response code={}", responseCode);
-				throw new Exception("Response code="+responseCode);
-			}
+			
+			cstmt = conn.prepareCall("{call SPHE_HEALTH_CONSUMER_RECEIVED(?,?,?,?)}");
+			cstmt.setString(1,  PartyContactETL.NAME);
+			cstmt.setString(2,  clientId);
+			cstmt.setTimestamp(3,  heartbeatTime);
+			cstmt.setTimestamp(4,  new Timestamp(System.currentTimeMillis()));
+			cstmt.execute();
+			
+			cstmt.close();
+//			
+//			URL url = new URL(urlStr);
+//			httpCon = (HttpURLConnection)url.openConnection();
+//			httpCon.setRequestMethod("POST");
+//			int responseCode = httpCon.getResponseCode();
+//			String readLine = null;
+//			if (httpCon.HTTP_OK == responseCode) {
+//				BufferedReader in = new BufferedReader(new InputStreamReader(httpCon.getInputStream()));
+//				StringBuffer response = new StringBuffer();
+//				while ((readLine = in.readLine()) != null) {
+//					response.append(readLine);
+//				}
+//				in.close();
+//
+//			} else {
+//				logger.error(">>> Response code={}", responseCode);
+//				throw new Exception("Response code="+responseCode);
+//			}
 		} catch(Exception e) {
 			logger.error(">>> Response code={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
 			throw e;
 		} finally {
-			if (httpCon != null ) httpCon.disconnect();
+			if (cstmt != null ) cstmt.close();;
 		}
 	}
 }

@@ -37,6 +37,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTableEnum;
+import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
 
 
@@ -59,21 +60,21 @@ public class PartyContactService {
 	private String streamingEtlName;
 
 	//	@Value("${table.name.partycontact}")
-//	private String tableNamePartycontact;
+	//	private String tableNamePartycontact;
 
-//	@Value("${table.create.file.party_contact}")
-//	private String tableCreateFilePartycontact;
+	//	@Value("${table.create.file.party_contact}")
+	//	private String tableCreateFilePartycontact;
 
-	//	@Value("${source.db.driver}")
+	@Value("${source.db.driver}")
 	private String sourceDbDriver;
 
-	//	@Value("${source.db.url}")
+	@Value("${source.db.url}")
 	private String sourceDbUrl;
 
-	//	@Value("${source.db.username}")
+	@Value("${source.db.username}")
 	private String sourceDbUsername;
 
-	//	@Value("${source.db.password}")
+	@Value("${source.db.password}")
 	private String sourceDbPassword;
 
 	@Value("${sink.db.driver}")
@@ -88,47 +89,7 @@ public class PartyContactService {
 	@Value("${sink.db.password}")
 	private String sinkDbPassword;
 
-	public void runPartyContact(boolean loadData) throws Exception {
-		LOG.info(">>>>>>>>>>>> runPartyContact ");
 
-		// new ETL state
-		String urlStr = String.format("http://%s:%d/insertEtlState/{etlName}", streamingEtlHost, Integer.valueOf(streamingEtlPort), streamingEtlName);
-		HttpURLConnection httpConn = null;
-		try {
-			URL url = new URL(urlStr);
-			httpConn = (HttpURLConnection)url.openConnection();
-			httpConn.setRequestMethod("POST");
-			int responseCode = httpConn.getResponseCode();
-
-			BufferedReader in = new BufferedReader(new InputStreamReader(httpConn.getInputStream()));
-			StringBuffer response = new StringBuffer();
-			String readLine = null;
-			while ((readLine = in.readLine()) != null) {
-				response.append(readLine);
-			}
-			in.close();
-
-			LOG.info(">>>>> insertEtlState responsecode={}", responseCode);
-
-		} finally {
-			if (httpConn != null ) httpConn.disconnect();
-		}
-
-
-		//apply logminer sync tables and restart logminer
-
-		if (loadData) {
-			// load data
-
-
-		} 
-
-		// get max scn from sink data
-
-
-
-		// run consumer
-	}
 	public void createTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> createTable ");
 
@@ -139,19 +100,19 @@ public class PartyContactService {
 			} 
 			executeSqlScriptFromFile(e.getScriptFile());
 		}
-		
-	
+
+
 	}
 	public void dropTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> drop Table ");
-		
+
 		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
 			if (tableExists(e.getTableName())) {
 				LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
 				executeScript("DROP TABLE " + e.getTableName());
 			} 
 		}
-		
+
 	}
 
 	public void truncateTable(String table) throws Exception {
@@ -160,6 +121,49 @@ public class PartyContactService {
 		executeScript("TRUNCATE TABLE " + table);
 
 		LOG.info(">>>>>>>>>>>> truncatePartyContactTable Done!!!");
+	}
+	public long loadAllData() throws Exception {
+
+		ExecutorService executor = Executors.newFixedThreadPool(6);
+
+		List<String> tableList = new ArrayList<>();
+		tableList.add(Table.T_POLICY_HOLDER);
+		tableList.add(Table.T_POLICY_HOLDER_LOG);
+		tableList.add(Table.T_INSURED_LIST);
+		tableList.add(Table.T_INSURED_LIST_LOG);
+		tableList.add(Table.T_CONTRACT_BENE);
+		tableList.add(Table.T_CONTRACT_BENE_LOG);
+
+		List<CompletableFuture<Long>> futures = 
+				tableList.stream().map(t ->CompletableFuture.supplyAsync(
+						() -> {			
+							Long cnt = 0L;
+							try {
+								LOG.info(">>> loading Table async {} ... ", t);
+								cnt = loadTable(t);
+							} catch (Exception e) {
+								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+							}
+							return cnt;
+						}
+						, executor)
+						)
+				.collect(Collectors.toList());			
+
+		List<Long> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
+
+		LOG.info(">>> add primary key");
+		addPrimaryKey();
+
+		LOG.info(">>> create index");
+		createIndexes();
+
+
+		long count = 0;
+		for (Long c : result) {
+			count = count  +c;
+		}
+		return count;
 	}
 	public long loadTable(String table) throws Exception {
 		BasicDataSource sourceConnectionPool = null;
@@ -182,17 +186,17 @@ public class PartyContactService {
 			sinkConnectionPool.setPassword(sinkDbPassword);
 			sinkConnectionPool.setMaxTotal(THREADS);
 
-			if ("T_POLICY_HOLDER".equalsIgnoreCase(table)) {
+			if (Table.T_POLICY_HOLDER.equalsIgnoreCase(table)) {
 				count = loadTable(table, 1, sourceConnectionPool, sinkConnectionPool);
-			} else if ("T_INSURED_LIST".equalsIgnoreCase(table)) {
+			} else if (Table.T_INSURED_LIST.equalsIgnoreCase(table)) {
 				count = loadTable(table, 2, sourceConnectionPool, sinkConnectionPool);
-			} else if ("T_CONTRACT_BENE".equalsIgnoreCase(table)) {
+			} else if (Table.T_CONTRACT_BENE.equalsIgnoreCase(table)) {
 				count = loadTable(table, 3, sourceConnectionPool, sinkConnectionPool);
-			} else if ("T_POLICY_HOLDER_LOG".equalsIgnoreCase(table)) {
+			} else if (Table.T_POLICY_HOLDER_LOG.equalsIgnoreCase(table)) {
 				count = loadTableTLog(table, 1, sourceConnectionPool, sinkConnectionPool);
-			} else if ("T_INSURED_LIST_LOG".equalsIgnoreCase(table)) {
+			} else if (Table.T_POLICY_HOLDER_LOG.equalsIgnoreCase(table)) {
 				count = loadTableTLog(table, 2, sourceConnectionPool, sinkConnectionPool);
-			} else if ("T_CONTRACT_BENE_LOG".equalsIgnoreCase(table)) {
+			} else if (Table.T_CONTRACT_BENE_LOG.equalsIgnoreCase(table)) {
 				count = loadTableTLog(table, 3, sourceConnectionPool, sinkConnectionPool);
 			} else {	
 				throw new Exception("Incorrect table name '" + table + "'");
@@ -222,8 +226,39 @@ public class PartyContactService {
 
 		LOG.info(">>>>>>>>>>>> addPrimaryKey done!!! ");
 	}
+	public void createIndexes() throws Exception {
+	
+		ExecutorService executor = Executors.newFixedThreadPool(8);
 
-	public void createIndex(String columnName) throws Exception {
+		List<String> indexList = new ArrayList<>();
+		indexList.add("ADDRESS_1");
+		indexList.add("EMAIL");
+		indexList.add("MOBILE_TEL");
+		indexList.add("CERTI_CODE");
+		indexList.add("POLICY_ID");
+		indexList.add("UPDATE_TIMESTAMP");
+		indexList.add("ROLE_SCN");
+		indexList.add("ADDRE_SCN");
+
+		List<CompletableFuture<String>> futures = 
+				indexList.stream().map(t ->CompletableFuture.supplyAsync(
+						() -> {		
+							String ret = "";
+							try {
+								ret = createIndex(t);
+							} catch (Exception e) {
+								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+							}
+							return ret;
+						}
+						, executor)
+						)
+				.collect(Collectors.toList());			
+
+		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
+
+	}
+	public String createIndex(String columnName) throws Exception {
 		LOG.info(">>>>>>>>>>>> createIndexes ");
 
 		if ("ADDRESS_1".equalsIgnoreCase(columnName)) {
@@ -241,15 +276,17 @@ public class PartyContactService {
 		} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
 			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (POLICY_ID)");
 			LOG.info(">>>>>>>>>>>> 5/7 createIndex for policy_id done!!! ");
-		} else if ("UPDATE_TIME".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TIME ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (UPDATE_TIME)");
-			LOG.info(">>>>>>>>>>>> 6/7 createIndex for update_time done!!! ");
 		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
 			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (UPDATE_TIMESTAMP)");
 			LOG.info(">>>>>>>>>>>> 7/7 createIndex for update_timestamp done!!! ");
+		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ROLE_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_SCN)");
+		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
+			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDR_SCN)");
 		} else {
 			throw new Exception("Invalid Column Name:" + columnName);
 		}
+		return columnName;
 	}
 	private long loadTable(String table, Integer roleType, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool) throws Exception {
 
@@ -303,7 +340,7 @@ public class PartyContactService {
 			List<CompletableFuture<Map<String, String>>> futures = 
 					loadBeanList.stream().map(t -> CompletableFuture.supplyAsync(
 							() -> {
-								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.UPDATE_TIME,a.ADDRESS_ID,a.ROWID,a.ORA_ROWSCN,c.ADDRESS_1 from " 
+								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.ADDRESS_ID,c.ADDRESS_1,a.ORA_ROWSCN ROLE_SCN,a.ROWID ROLE_ROW_ID,c.ORA_ROWSCN ADDR_SCN,c.ROWID ADDR_ROW_ID from " 
 										+ t.tableName 
 										+ " a inner join T_CONTRACT_MASTER b ON a.POLICY_ID=b.POLICY_ID "
 										+ " left join T_ADDRESS c on a.address_id = c.address_id "
@@ -382,7 +419,7 @@ public class PartyContactService {
 			List<CompletableFuture<Map<String, String>>> futures = 
 					loadBeanList.stream().map(t -> CompletableFuture.supplyAsync(
 							() -> {
-								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.UPDATE_TIME,a.ADDRESS_ID,a.ROWID,a.ORA_ROWSCN,c.ADDRESS_1 from " 
+								String sqlStr = "select a.LIST_ID,a.POLICY_ID,a.NAME,a.CERTI_CODE,a.MOBILE_TEL,a.EMAIL,a.ADDRESS_ID,c.ADDRESS_1,a.ORA_ROWSCN ROLE_SCN,a.ROWID ROLE_ROW_ID,c.ORA_ROWSCN ADDR_SCN,c.ROWID ADDR_ROW_ID from " 
 										+ t.tableName 
 										+ " a inner join T_POLICY_CHANGE b ON a.POLICY_CHG_ID=b.POLICY_CHG_ID "
 										+ " left join T_ADDRESS c on a.address_id = c.address_id "
@@ -431,8 +468,8 @@ public class PartyContactService {
 
 			sinkConn.setAutoCommit(false); 
 			pstmt = sinkConn.prepareStatement(
-					"insert into " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,UPDATE_TIME,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
-							+ " values (?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,?)");
+					"insert into " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,ROLE_TABLE,ROLE_SCN,ROLE_COMMIT_SCN,ROLE_ROW_ID, ADDR_SCN,ADDR_COMMIT_SCN,ADDR_ROW_ID) " 
+							+ " values (?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,?,?,NULL,?,?,NULL,?)");
 
 			while (rs.next()) {
 				count++;
@@ -458,20 +495,21 @@ public class PartyContactService {
 				} else {
 					pstmt.setString(7, StringUtils.trim(email.toLowerCase()));
 				}
-				pstmt.setDate(8, rs.getDate("UPDATE_TIME"));
 				Long addressId = rs.getLong("ADDRESS_ID");
 				if (rs.wasNull()) {
-					pstmt.setNull(9, Types.BIGINT);
+					pstmt.setNull(8, Types.BIGINT);
 				} else {
-					pstmt.setLong(9, addressId);
+					pstmt.setLong(8, addressId);
 				}
 
-				pstmt.setString(10, StringUtils.trim(rs.getString("ADDRESS_1")));
+				pstmt.setString(9, StringUtils.trim(rs.getString("ADDRESS_1")));
 
-				pstmt.setLong(11, rs.getLong("ORA_ROWSCN"));
+				pstmt.setString(10, loadBean.tableName);
+				pstmt.setLong(11, rs.getLong("ROLE_SCN"));
+				pstmt.setString(12, rs.getString("ROLE_ROW_ID"));
+				pstmt.setLong(13, rs.getLong("ADDR_SCN"));
+				pstmt.setString(14, rs.getString("ADDR_ROW_ID"));
 
-				pstmt.setLong(12, rs.getLong("ORA_ROWSCN"));
-				pstmt.setString(13, rs.getString("ROWID"));
 				pstmt.addBatch();
 
 				if (count % BATCH_SIZE == 0) {

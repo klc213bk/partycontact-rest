@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.transglobe.streamingetl.partycontact.rest.bean.Response;
 import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService;
 
@@ -24,7 +27,50 @@ public class PartyContactController {
 	@Autowired
 	private PartyContactService partyContactService;
 
-
+	@Autowired
+	private ObjectMapper mapper;
+	
+	@PostMapping(path="/cleanup", produces=MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	public ResponseEntity<Object> cleanup() {
+		logger.info(">>>>controller cleanup is called");
+		
+		ObjectNode objectNode = mapper.createObjectNode();
+		
+		try {
+			partyContactService.cleanup();
+			objectNode.put("returnCode", "0000");
+		} catch (Exception e) {
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", ExceptionUtils.getMessage(e));
+			objectNode.put("returnCode", ExceptionUtils.getStackTrace(e));
+		}
+		
+		logger.info(">>>>controller cleanup finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	@PostMapping(path="/initialize", produces=MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	public ResponseEntity<Object> initialize() {
+		logger.info(">>>>controller initialize is called");
+		
+		ObjectNode objectNode = mapper.createObjectNode();
+		
+		try {
+			partyContactService.initialize();
+			objectNode.put("returnCode", "0000");
+		} catch (Exception e) {
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", ExceptionUtils.getMessage(e));
+			objectNode.put("returnCode", ExceptionUtils.getStackTrace(e));
+		}
+		
+		logger.info(">>>>controller initialize finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	
 	@PostMapping(value="/createTable")
 	@ResponseBody
 	public ResponseEntity<Response> createTable() throws Exception{

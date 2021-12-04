@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -18,8 +19,10 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,11 +38,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactETL;
+import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactSyncTableEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTableEnum;
+import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTopicEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
-
 
 
 @Service
@@ -49,6 +56,9 @@ public class PartyContactService {
 	private static final int THREADS = 15;
 
 	private static final int BATCH_SIZE = 3000;
+
+	@Value("${kafka.rest.url}")
+	private String kafkaRestUrl;
 
 	@Value("{streaming.etl.host}")
 	private String streamingEtlHost;
@@ -81,7 +91,7 @@ public class PartyContactService {
 	private String sinkDbDriver;
 
 	@Value("${sink.db.url}")
-	private String partycontactDbUrl;
+	private String sinkDbUrl;
 
 	@Value("${sink.db.username}")
 	private String sinkDbUsername;
@@ -90,37 +100,152 @@ public class PartyContactService {
 	private String sinkDbPassword;
 
 
-	public void createTable() throws Exception {
-		LOG.info(">>>>>>>>>>>> createTable ");
+	public void cleanup() throws Exception {
+		LOG.info(">>>>>>>>>>>> cleanup ");
+		Connection conn = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
-		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-			if (tableExists(e.getTableName())) {
-				LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
-				executeScript("DROP TABLE " + e.getTableName());
-			} 
-			executeSqlScriptFromFile(e.getScriptFile());
+			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+				if (tableExists(e.getTableName())) {
+					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
+					executeScript(conn, "DROP TABLE " + e.getTableName());
+				} 
+			}
+		} finally {
+			if (conn != null) conn.close();
+		}
+		LOG.info(">>> delete kafka topic");
+		List<String> topicList = new ArrayList<>();
+		topicList.add(PartyContactTopicEnum.DDL.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER_LOG.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST_LOG.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE_LOG.getTopic());
+		topicList.add(PartyContactTopicEnum.TOPIC_T_ADDRESS.getTopic());
+		deleteKafkaTopics(topicList);
+	}
+
+	public void initialize() throws Exception{
+		LOG.info(">>>>>>>>>>>> initialize ");
+		Connection conn = null;
+		CallableStatement cstmt = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
+			conn.setAutoCommit(false);
+
+			// create table
+			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+				executeSqlScriptFromFile(conn, e.getScriptFile());
+			}	
+
+			conn.commit();
+
+			// insert etl
+			LOG.info(">>> insert etl name ");
+			cstmt = conn.prepareCall("{call SP_INS_ETL_NAME(?,?,?,?,?)}");
+
+			cstmt.setString(1,  PartyContactETL.CAT);
+			cstmt.setString(2,  PartyContactETL.NAME);
+			cstmt.setInt(3,  0);
+			cstmt.setString(4, "REGISTERED");
+			cstmt.setString(5,  PartyContactETL.NOTE);
+			cstmt.execute();
+			cstmt.close();
+			conn.commit();
+
+			LOG.info(">>> insert kafka topic");
+			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
+
+				cstmt = conn.prepareCall("{call SP_INS_KAFKA_TOPIC(?,?)}");
+				cstmt.setString(1,  PartyContactETL.NAME);
+				cstmt.setString(2,  e.getTopic());
+				cstmt.execute();
+				cstmt.close();
+			}
+			conn.commit();
+
+			List<String> topicList = new ArrayList<>();
+			topicList.add(PartyContactTopicEnum.DDL.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER_LOG.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST_LOG.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE_LOG.getTopic());
+			topicList.add(PartyContactTopicEnum.TOPIC_T_ADDRESS.getTopic());
+			insertKafkaTopics(topicList);
+
+			LOG.info(">>> insert logminer table");
+			//			deleteLogminerTable(conn, HealthETL.NAME);
+			for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
+				insertLogminerTable(conn, PartyContactETL.NAME, e.getTableName());
+			}
+			conn.commit();
+
+			conn.close();
+		} finally {
+			if (cstmt != null) cstmt.close();
+			if (conn != null) conn.close();
 		}
 
+	}
+	public void createTable() throws Exception {
+		LOG.info(">>>>>>>>>>>> createTable ");
+		Connection conn = null;
+		Statement stmt = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
+
+			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+				if (tableExists(e.getTableName())) {
+					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
+					executeScript(conn, "DROP TABLE " + e.getTableName());
+				} 
+				executeSqlScriptFromFile(conn, e.getScriptFile());
+			}
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (stmt != null) stmt.close();
+			if (conn != null) conn.close();
+		}
 	}
 	public void dropTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> drop Table ");
-
-		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-			if (tableExists(e.getTableName())) {
-				LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
-				executeScript("DROP TABLE " + e.getTableName());
-			} 
+		Connection conn = null;
+		try {
+			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+				if (tableExists(e.getTableName())) {
+					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
+					executeScript(conn, "DROP TABLE " + e.getTableName());
+				} 
+			}
+		} finally {
+			if (conn != null) conn.close();
 		}
-
 	}
 
 	public void truncateTable(String table) throws Exception {
 		LOG.info(">>>>>>>>>>>> truncateTable ");
+		Connection conn = null;
+		try {
+			executeScript(conn, "TRUNCATE TABLE " + table);
 
-		executeScript("TRUNCATE TABLE " + table);
-
-		LOG.info(">>>>>>>>>>>> truncatePartyContactTable Done!!!");
+			LOG.info(">>>>>>>>>>>> truncatePartyContactTable Done!!!");
+		} finally {
+			if (conn != null) conn.close();
+		}
 	}
 	public long loadAllData() throws Exception {
 
@@ -180,7 +305,7 @@ public class PartyContactService {
 			sourceConnectionPool.setMaxTotal(THREADS);
 
 			sinkConnectionPool = new BasicDataSource();
-			sinkConnectionPool.setUrl(partycontactDbUrl);
+			sinkConnectionPool.setUrl(sinkDbUrl);
 			sinkConnectionPool.setDriverClassName(sinkDbDriver);
 			sinkConnectionPool.setUsername(sinkDbUsername);
 			sinkConnectionPool.setPassword(sinkDbPassword);
@@ -221,13 +346,27 @@ public class PartyContactService {
 
 	public void addPrimaryKey() throws Exception {
 		LOG.info(">>>>>>>>>>>> addPrimaryKey ");
+		Connection conn = null;
+		Statement stmt = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
-		executeScript("ALTER TABLE  " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " ADD CONSTRAINT PK_T_PARTY_CONTACT PRIMARY KEY (ROLE_TYPE,LIST_ID)");
+			executeScript(conn, "ALTER TABLE  " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " ADD CONSTRAINT PK_T_PARTY_CONTACT PRIMARY KEY (ROLE_TYPE,LIST_ID)");
 
-		LOG.info(">>>>>>>>>>>> addPrimaryKey done!!! ");
+			LOG.info(">>>>>>>>>>>> addPrimaryKey done!!! ");
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (stmt != null) stmt.close();
+			if (conn != null) conn.close();
+		}
 	}
 	public void createIndexes() throws Exception {
-	
+
 		ExecutorService executor = Executors.newFixedThreadPool(8);
 
 		List<String> indexList = new ArrayList<>();
@@ -260,31 +399,38 @@ public class PartyContactService {
 	}
 	public String createIndex(String columnName) throws Exception {
 		LOG.info(">>>>>>>>>>>> createIndexes ");
+		Connection conn = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
-		if ("ADDRESS_1".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDRESS_1)");
-			LOG.info(">>>>>>>>>>>> 1/7 createIndex for addr1 done!!! ");
-		} else if ("EMAIL".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (EMAIL)");
-			LOG.info(">>>>>>>>>>>> 2/7 createIndex for email done!!! ");
-		}  else if ("MOBILE_TEL".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (MOBILE_TEL)");
-			LOG.info(">>>>>>>>>>>> 3/7 createIndex for mobile_tel done!!! ");
-		} else if ("CERTI_CODE".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (CERTI_CODE)");
-			LOG.info(">>>>>>>>>>>> 4/7 createIndex for certi_code done!!! ");
-		} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (POLICY_ID)");
-			LOG.info(">>>>>>>>>>>> 5/7 createIndex for policy_id done!!! ");
-		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (UPDATE_TIMESTAMP)");
-			LOG.info(">>>>>>>>>>>> 7/7 createIndex for update_timestamp done!!! ");
-		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ROLE_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_SCN)");
-		} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
-			executeScript("CREATE INDEX IDX_T_PARTY_CONTACT_ADDR_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDR_SCN)");
-		} else {
-			throw new Exception("Invalid Column Name:" + columnName);
+			if ("ADDRESS_1".equalsIgnoreCase(columnName)) {
+				executeScript(conn, "CREATE INDEX IDX_T_PARTY_CONTACT_ADDR1 ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDRESS_1)");
+				LOG.info(">>>>>>>>>>>> createIndex for addr1 done!!! ");
+			} else if ("EMAIL".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_EMAIL ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (EMAIL)");
+				LOG.info(">>>>>>>>>>>> createIndex for email done!!! ");
+			}  else if ("MOBILE_TEL".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (MOBILE_TEL)");
+				LOG.info(">>>>>>>>>>>> createIndex for mobile_tel done!!! ");
+			} else if ("CERTI_CODE".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_CERTI_CODE ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (CERTI_CODE)");
+				LOG.info(">>>>>>>>>>>> createIndex for certi_code done!!! ");
+			} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (POLICY_ID)");
+				LOG.info(">>>>>>>>>>>> createIndex for policy_id done!!! ");
+			} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_UPD_TS ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (UPDATE_TIMESTAMP)");
+				LOG.info(">>>>>>>>>>>> createIndex for update_timestamp done!!! ");
+			} else if ("ROLE_SCN".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_ROLE_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_SCN)");
+			} else if ("ADDR_SCN".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_ADDR_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDR_SCN)");
+			} else {
+				throw new Exception("Invalid Column Name:" + columnName);
+			}
+		} finally {
+			if (conn != null) conn.close();
 		}
 		return columnName;
 	}
@@ -585,14 +731,13 @@ public class PartyContactService {
 		return map;
 	}
 
-	private void executeScript(String script) throws Exception {
+	private void executeScript(Connection conn, String script) throws Exception {
 
-		Connection conn = null;
 		Statement stmt = null;
 		try {
 
 			Class.forName(sinkDbDriver);
-			conn = DriverManager.getConnection(partycontactDbUrl, sinkDbUsername, sinkDbPassword);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
 			stmt = conn.createStatement();
 			stmt.executeUpdate(script);
@@ -605,21 +750,14 @@ public class PartyContactService {
 			throw e1;
 		} finally {
 			if (stmt != null) stmt.close();
-			if (conn != null) conn.close();
 		}
 
 	}
-	public void executeSqlScriptFromFile(String file) throws Exception {
+	public void executeSqlScriptFromFile(Connection conn, String file) throws Exception {
 		LOG.info(">>>>>>>>>>>> executeSqlScriptFromFile file={}", file);
 
-		Connection conn = null;
-		PreparedStatement pstmt = null;
+		Statement stmt = null;
 		try {
-
-			Class.forName(sinkDbDriver);
-			conn = DriverManager.getConnection(partycontactDbUrl, sinkDbUsername, sinkDbPassword);
-
-			Statement stmt = null;
 			ClassLoader loader = Thread.currentThread().getContextClassLoader();	
 			try (InputStream inputStream = loader.getResourceAsStream(file)) {
 				String createScript = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
@@ -639,8 +777,7 @@ public class PartyContactService {
 
 			throw e1;
 		} finally {
-			if (pstmt != null) pstmt.close();
-			if (conn != null) conn.close();
+			if (stmt != null) stmt.close();
 		}
 	}
 	public boolean tableExists(String table) throws Exception {
@@ -653,7 +790,7 @@ public class PartyContactService {
 		try {
 
 			Class.forName(sinkDbDriver);
-			conn = DriverManager.getConnection(partycontactDbUrl, sinkDbUsername, sinkDbPassword);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
 			sql = "select count(*) CNT from USER_TABLES where TABLE_NAME = ?";
 			pstmt = conn.prepareStatement(sql);
@@ -681,5 +818,153 @@ public class PartyContactService {
 			if (conn != null) conn.close();
 		}
 		return exists;
+	}
+	private void insertTopic(Connection conn, String etlName, String topic) throws Exception{
+		LOG.info(">>>>>>>>>> insertTopic,{},{}", etlName, topic);
+
+		CallableStatement cstmt = null;
+		try {	
+
+
+			cstmt = conn.prepareCall("{call SP_INS_KAFKA_TOPIC(?,?)}");
+			cstmt.setString(1,  etlName);
+			cstmt.setString(2,  topic);
+			cstmt.execute();
+			cstmt.close();
+
+
+			String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
+			ObjectMapper mapper = new ObjectMapper();
+			JsonNode jsonNode = mapper.readTree(response);
+			String returnCode = jsonNode.get("returnCode").asText();
+			String topicStr = jsonNode.get("topics").asText();
+
+			List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
+			Set<String> topicSet = new HashSet<>(topicList);
+
+			LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
+			if (topicSet.contains(topic)) {
+				kafkaRestService(kafkaRestUrl+"/deleteTopic/" + topic, "POST");
+				LOG.info(">>>>>>>>>>>> topic={} deleted ", topic);
+
+			}
+
+			kafkaRestService(kafkaRestUrl+"/createTopic/"+topic, "POST");
+			LOG.info(">>>>>>>>>>>> topic={} created ", topic);
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (cstmt != null) cstmt.close();
+		}
+	}
+	public void deleteKafkaTopics(List<String> deleteTopicList) throws Exception{
+		LOG.info(">>>>>>>>>> deleteTopic");
+
+		try {	
+
+			String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
+			ObjectMapper mapper = new ObjectMapper();
+			JsonNode jsonNode = mapper.readTree(response);
+			String returnCode = jsonNode.get("returnCode").asText();
+			String topicStr = jsonNode.get("topics").asText();
+
+			List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
+			Set<String> topicSet = new HashSet<>(topicList);
+
+			LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
+
+			for (String t : deleteTopicList) {
+				if (topicSet.contains(t)) {
+					kafkaRestService(kafkaRestUrl+"/deleteTopic/" + t, "POST");
+					LOG.info(">>>>>>>>>>>> topic={} deleted ", t);
+
+				}
+			}
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+
+		}
+	}
+	private String kafkaRestService(String urlStr, String requestMethod) throws Exception {
+		LOG.info(">>>>>>>>>>>> kafka service urlStr={}", urlStr);
+
+		HttpURLConnection httpConn = null;
+		URL url = null;
+		try {
+			url = new URL(urlStr);
+			httpConn = (HttpURLConnection)url.openConnection();
+			httpConn.setRequestMethod(requestMethod);
+			int responseCode = httpConn.getResponseCode();
+			//			LOG.info(">>>>>  responseCode={}",responseCode);
+
+			BufferedReader in = new BufferedReader(new InputStreamReader(httpConn.getInputStream()));
+			StringBuffer response = new StringBuffer();
+			String readLine = null;
+			while ((readLine = in.readLine()) != null) {
+				response.append(readLine);
+			}
+			in.close();
+
+			LOG.info(">>>>> kafkaRestService responsecode={}, response={}", responseCode, response.toString());
+
+			return response.toString();
+		} finally {
+			if (httpConn != null ) httpConn.disconnect();
+		}
+	}
+	private void insertKafkaTopics(List<String> insertTopicList) throws Exception{
+		LOG.info(">>>>>>>>>> insertKafkaTopics");
+		String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
+		ObjectMapper mapper = new ObjectMapper();
+		JsonNode jsonNode = mapper.readTree(response);
+		String returnCode = jsonNode.get("returnCode").asText();
+		String topicStr = jsonNode.get("topics").asText();
+
+		List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
+		Set<String> topicSet = new HashSet<>(topicList);
+
+		LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
+
+		for (String topic : insertTopicList) {
+			if (topicSet.contains(topic)) {
+				kafkaRestService(kafkaRestUrl+"/deleteTopic/" + topic, "POST");
+				LOG.info(">>>>>>>>>>>> topic={} deleted ", topic);
+
+			}
+		}
+		for (String topic : insertTopicList) {
+			kafkaRestService(kafkaRestUrl+"/createTopic/"+topic, "POST");
+			LOG.info(">>>>>>>>>>>> topic={} created ", topic);
+		}
+	}
+	private void insertLogminerTable(Connection conn, String etlName, String tableName) throws Exception{
+		LOG.info(">>>>>>>>>> insertLogminerTable");
+		PreparedStatement pstmt = null;
+		String sql = null;
+		try {			
+			sql = "insert into TM_LOGMINER_TABLE (ETL_NAME,TABLE_NAME) values (?,?)";
+			pstmt = conn.prepareStatement(sql);
+			pstmt.setString(1, etlName);
+			pstmt.setString(2, tableName);
+			pstmt.executeUpdate();
+			pstmt.close();
+
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (pstmt != null) pstmt.close();
+		}
 	}
 }

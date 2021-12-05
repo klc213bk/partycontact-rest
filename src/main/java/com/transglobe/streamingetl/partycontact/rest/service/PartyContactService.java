@@ -47,6 +47,8 @@ import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTableEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTopicEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
+import com.transglobe.streamingetl.partycontact.rest.util.DbUtils;
+import com.transglobe.streamingetl.partycontact.rest.util.HttpUtils;
 
 
 @Service
@@ -57,17 +59,20 @@ public class PartyContactService {
 
 	private static final int BATCH_SIZE = 3000;
 
-	@Value("${kafka.rest.url}")
-	private String kafkaRestUrl;
+	@Value("${tglminer.rest.url}")
+	private String tglminerRestUrl;
 
-	@Value("{streaming.etl.host}")
-	private String streamingEtlHost;
-
-	@Value("{streaming.etl.port}")
-	private String streamingEtlPort;
-
-	@Value("{streaming.etl.name}")
-	private String streamingEtlName;
+	//	@Value("${kafka.rest.url}")
+	//	private String kafkaRestUrl;
+	//
+	//	@Value("{streaming.etl.host}")
+	//	private String streamingEtlHost;
+	//
+	//	@Value("{streaming.etl.port}")
+	//	private String streamingEtlPort;
+	//
+	//	@Value("{streaming.etl.name}")
+	//	private String streamingEtlName;
 
 	//	@Value("${table.name.partycontact}")
 	//	private String tableNamePartycontact;
@@ -99,6 +104,17 @@ public class PartyContactService {
 	@Value("${sink.db.password}")
 	private String sinkDbPassword;
 
+	@Value("${tglminer.db.driver}")
+	private String tglminerDbDriver;
+
+	@Value("${tglminer.db.url}")
+	private String tglminerDbUrl;
+
+	@Value("${tglminer.db.username}")
+	private String tglminerDbUsername;
+
+	@Value("${tglminer.db.password}")
+	private String tglminerDbPassword;
 
 	public void cleanup() throws Exception {
 		LOG.info(">>>>>>>>>>>> cleanup ");
@@ -106,6 +122,13 @@ public class PartyContactService {
 		try {
 			Class.forName(sinkDbDriver);
 			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
+
+			// connect to tglminer rest to remove etl
+			String removeEtlUrl = tglminerRestUrl + "/init/removeEtl/" + PartyContactETL.NAME;
+			LOG.info(">>>>>>> removeEtlUrl={}", removeEtlUrl);
+//			
+			String response = HttpUtils.restService(removeEtlUrl, "POST");
+			LOG.info(">>>>>>> remove ETL response={}", response);
 
 			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
 				if (tableExists(e.getTableName())) {
@@ -116,84 +139,61 @@ public class PartyContactService {
 		} finally {
 			if (conn != null) conn.close();
 		}
-		LOG.info(">>> delete kafka topic");
-		List<String> topicList = new ArrayList<>();
-		topicList.add(PartyContactTopicEnum.DDL.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER_LOG.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST_LOG.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE_LOG.getTopic());
-		topicList.add(PartyContactTopicEnum.TOPIC_T_ADDRESS.getTopic());
-		deleteKafkaTopics(topicList);
 	}
-
 	public void initialize() throws Exception{
-		LOG.info(">>>>>>>>>>>> initialize ");
 		Connection conn = null;
+
 		CallableStatement cstmt = null;
 		try {
-			Class.forName(sinkDbDriver);
-			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
-			conn.setAutoCommit(false);
 
-			// create table
-			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-				executeSqlScriptFromFile(conn, e.getScriptFile());
-			}	
+			Class.forName(tglminerDbDriver);
+			conn = DriverManager.getConnection(tglminerDbUrl, tglminerDbUsername, tglminerDbPassword);
 
-			conn.commit();
+			setupDbObjects(conn);
 
 			// insert etl
 			LOG.info(">>> insert etl name ");
-			cstmt = conn.prepareCall("{call SP_INS_ETL_NAME(?,?,?,?,?)}");
+			cstmt = conn.prepareCall("{call SP_INS_ETL_NAME(?,?,?)}");
 
 			cstmt.setString(1,  PartyContactETL.CAT);
 			cstmt.setString(2,  PartyContactETL.NAME);
-			cstmt.setInt(3,  0);
-			cstmt.setString(4, "REGISTERED");
-			cstmt.setString(5,  PartyContactETL.NOTE);
+			cstmt.setString(3,  PartyContactETL.NOTE);
 			cstmt.execute();
 			cstmt.close();
-			conn.commit();
 
 			LOG.info(">>> insert kafka topic");
 			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
-
-				cstmt = conn.prepareCall("{call SP_INS_KAFKA_TOPIC(?,?)}");
-				cstmt.setString(1,  PartyContactETL.NAME);
-				cstmt.setString(2,  e.getTopic());
-				cstmt.execute();
-				cstmt.close();
+				String topic = e.getTopic();
+				String insertTopicUrl = tglminerRestUrl + "/init/createTopic/" + PartyContactETL.NAME + "/" + topic;
+				String response = HttpUtils.restService(insertTopicUrl, "POST");
+				
+				LOG.info(">>>>>>> kafka topic {} inserted, response={}", topic,response);
 			}
-			conn.commit();
-
-			List<String> topicList = new ArrayList<>();
-			topicList.add(PartyContactTopicEnum.DDL.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_POLICY_HOLDER_LOG.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_INSURED_LIST_LOG.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_CONTRACT_BENE_LOG.getTopic());
-			topicList.add(PartyContactTopicEnum.TOPIC_T_ADDRESS.getTopic());
-			insertKafkaTopics(topicList);
 
 			LOG.info(">>> insert logminer table");
-			//			deleteLogminerTable(conn, HealthETL.NAME);
 			for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
-				insertLogminerTable(conn, PartyContactETL.NAME, e.getTableName());
+				String syncTableName = e.getSyncTableName();
+				String insertLogminerUrl = tglminerRestUrl + "/init/insertLogminerSyncTable/" + PartyContactETL.NAME + "/" + syncTableName;
+				String response = HttpUtils.restService(insertLogminerUrl, "POST");
+				LOG.info(">>>>>>> logminer syncTableName {} inserted, response={}", syncTableName,response);
 			}
-			conn.commit();
+			
 
-			conn.close();
 		} finally {
 			if (cstmt != null) cstmt.close();
 			if (conn != null) conn.close();
 		}
 
 	}
+	private void setupDbObjects(Connection conn) throws Exception {
+
+		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+			LOG.info(">>>>>>> create TABLE file {}",e.getScriptFile());
+			DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
+		}
+
+	}
+	
 	public void createTable() throws Exception {
 		LOG.info(">>>>>>>>>>>> createTable ");
 		Connection conn = null;
@@ -312,17 +312,17 @@ public class PartyContactService {
 			sinkConnectionPool.setMaxTotal(THREADS);
 
 			if (Table.T_POLICY_HOLDER.equalsIgnoreCase(table)) {
-				count = loadTable(table, 1, sourceConnectionPool, sinkConnectionPool);
+				count = doLoadTable(table, 1, sourceConnectionPool, sinkConnectionPool);
 			} else if (Table.T_INSURED_LIST.equalsIgnoreCase(table)) {
-				count = loadTable(table, 2, sourceConnectionPool, sinkConnectionPool);
+				count = doLoadTable(table, 2, sourceConnectionPool, sinkConnectionPool);
 			} else if (Table.T_CONTRACT_BENE.equalsIgnoreCase(table)) {
-				count = loadTable(table, 3, sourceConnectionPool, sinkConnectionPool);
+				count = doLoadTable(table, 3, sourceConnectionPool, sinkConnectionPool);
 			} else if (Table.T_POLICY_HOLDER_LOG.equalsIgnoreCase(table)) {
-				count = loadTableTLog(table, 1, sourceConnectionPool, sinkConnectionPool);
-			} else if (Table.T_POLICY_HOLDER_LOG.equalsIgnoreCase(table)) {
-				count = loadTableTLog(table, 2, sourceConnectionPool, sinkConnectionPool);
+				count = doLoadTableTLog(table, 1, sourceConnectionPool, sinkConnectionPool);
+			} else if (Table.T_INSURED_LIST_LOG.equalsIgnoreCase(table)) {
+				count = doLoadTableTLog(table, 2, sourceConnectionPool, sinkConnectionPool);
 			} else if (Table.T_CONTRACT_BENE_LOG.equalsIgnoreCase(table)) {
-				count = loadTableTLog(table, 3, sourceConnectionPool, sinkConnectionPool);
+				count = doLoadTableTLog(table, 3, sourceConnectionPool, sinkConnectionPool);
 			} else {	
 				throw new Exception("Incorrect table name '" + table + "'");
 			}
@@ -434,7 +434,7 @@ public class PartyContactService {
 		}
 		return columnName;
 	}
-	private long loadTable(String table, Integer roleType, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool) throws Exception {
+	private long doLoadTable(String table, Integer roleType, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool) throws Exception {
 
 		ExecutorService executor = Executors.newFixedThreadPool(THREADS);
 
@@ -491,7 +491,7 @@ public class PartyContactService {
 										+ " a inner join T_CONTRACT_MASTER b ON a.POLICY_ID=b.POLICY_ID "
 										+ " left join T_ADDRESS c on a.address_id = c.address_id "
 										+ " where b.LIABILITY_STATE = 0 and " + t.startSeq + " <= a.list_id and a.list_id < " + t.endSeq;
-								return loadPartyContact(sqlStr, t, sourceConnectionPool, sinkConnectionPool);
+								return insertPartyContact(sqlStr, t, sourceConnectionPool, sinkConnectionPool);
 							}
 							, executor)
 							)
@@ -513,7 +513,7 @@ public class PartyContactService {
 
 		}
 	}
-	private long loadTableTLog(String table, Integer roleType, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool) throws Exception {
+	private long doLoadTableTLog(String table, Integer roleType, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool) throws Exception {
 
 		ExecutorService executor = Executors.newFixedThreadPool(THREADS);
 
@@ -570,7 +570,7 @@ public class PartyContactService {
 										+ " a inner join T_POLICY_CHANGE b ON a.POLICY_CHG_ID=b.POLICY_CHG_ID "
 										+ " left join T_ADDRESS c on a.address_id = c.address_id "
 										+ " where a.LAST_CMT_FLG = 'Y' and b.POLICY_CHG_STATUS = 2 and " + t.startSeq + " <= a.log_id and a.log_id < " + t.endSeq;
-								return loadPartyContact(sqlStr, t, sourceConnectionPool, sinkConnectionPool);
+								return insertPartyContact(sqlStr, t, sourceConnectionPool, sinkConnectionPool);
 							}
 							, executor)
 							)
@@ -592,7 +592,7 @@ public class PartyContactService {
 
 		}
 	}
-	private Map<String, String> loadPartyContact(String sql, LoadBean loadBean, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool){
+	private Map<String, String> insertPartyContact(String sql, LoadBean loadBean, BasicDataSource sourceConnectionPool, BasicDataSource sinkConnectionPool){
 		//		logger.info(">>> run loadInterestedPartyContact");
 
 		Console cnsl = null;
@@ -819,81 +819,81 @@ public class PartyContactService {
 		}
 		return exists;
 	}
-	private void insertTopic(Connection conn, String etlName, String topic) throws Exception{
-		LOG.info(">>>>>>>>>> insertTopic,{},{}", etlName, topic);
-
-		CallableStatement cstmt = null;
-		try {	
-
-
-			cstmt = conn.prepareCall("{call SP_INS_KAFKA_TOPIC(?,?)}");
-			cstmt.setString(1,  etlName);
-			cstmt.setString(2,  topic);
-			cstmt.execute();
-			cstmt.close();
-
-
-			String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
-			ObjectMapper mapper = new ObjectMapper();
-			JsonNode jsonNode = mapper.readTree(response);
-			String returnCode = jsonNode.get("returnCode").asText();
-			String topicStr = jsonNode.get("topics").asText();
-
-			List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
-			Set<String> topicSet = new HashSet<>(topicList);
-
-			LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
-			if (topicSet.contains(topic)) {
-				kafkaRestService(kafkaRestUrl+"/deleteTopic/" + topic, "POST");
-				LOG.info(">>>>>>>>>>>> topic={} deleted ", topic);
-
-			}
-
-			kafkaRestService(kafkaRestUrl+"/createTopic/"+topic, "POST");
-			LOG.info(">>>>>>>>>>>> topic={} created ", topic);
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
-		} finally {
-			if (cstmt != null) cstmt.close();
-		}
-	}
-	public void deleteKafkaTopics(List<String> deleteTopicList) throws Exception{
-		LOG.info(">>>>>>>>>> deleteTopic");
-
-		try {	
-
-			String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
-			ObjectMapper mapper = new ObjectMapper();
-			JsonNode jsonNode = mapper.readTree(response);
-			String returnCode = jsonNode.get("returnCode").asText();
-			String topicStr = jsonNode.get("topics").asText();
-
-			List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
-			Set<String> topicSet = new HashSet<>(topicList);
-
-			LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
-
-			for (String t : deleteTopicList) {
-				if (topicSet.contains(t)) {
-					kafkaRestService(kafkaRestUrl+"/deleteTopic/" + t, "POST");
-					LOG.info(">>>>>>>>>>>> topic={} deleted ", t);
-
-				}
-			}
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
-		} finally {
-
-		}
-	}
+	//	private void insertTopic(Connection conn, String etlName, String topic) throws Exception{
+	//		LOG.info(">>>>>>>>>> insertTopic,{},{}", etlName, topic);
+	//
+	//		CallableStatement cstmt = null;
+	//		try {	
+	//
+	//
+	//			cstmt = conn.prepareCall("{call SP_INS_KAFKA_TOPIC(?,?)}");
+	//			cstmt.setString(1,  etlName);
+	//			cstmt.setString(2,  topic);
+	//			cstmt.execute();
+	//			cstmt.close();
+	//
+	//
+	//			String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
+	//			ObjectMapper mapper = new ObjectMapper();
+	//			JsonNode jsonNode = mapper.readTree(response);
+	//			String returnCode = jsonNode.get("returnCode").asText();
+	//			String topicStr = jsonNode.get("topics").asText();
+	//
+	//			List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
+	//			Set<String> topicSet = new HashSet<>(topicList);
+	//
+	//			LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
+	//			if (topicSet.contains(topic)) {
+	//				kafkaRestService(kafkaRestUrl+"/deleteTopic/" + topic, "POST");
+	//				LOG.info(">>>>>>>>>>>> topic={} deleted ", topic);
+	//
+	//			}
+	//
+	//			kafkaRestService(kafkaRestUrl+"/createTopic/"+topic, "POST");
+	//			LOG.info(">>>>>>>>>>>> topic={} created ", topic);
+	//
+	//		} catch (Exception e1) {
+	//
+	//			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+	//
+	//			throw e1;
+	//		} finally {
+	//			if (cstmt != null) cstmt.close();
+	//		}
+	//	}
+	//	public void deleteKafkaTopics(List<String> deleteTopicList) throws Exception{
+	//		LOG.info(">>>>>>>>>> deleteTopic");
+	//
+	//		try {	
+	//
+	//			String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
+	//			ObjectMapper mapper = new ObjectMapper();
+	//			JsonNode jsonNode = mapper.readTree(response);
+	//			String returnCode = jsonNode.get("returnCode").asText();
+	//			String topicStr = jsonNode.get("topics").asText();
+	//
+	//			List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
+	//			Set<String> topicSet = new HashSet<>(topicList);
+	//
+	//			LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
+	//
+	//			for (String t : deleteTopicList) {
+	//				if (topicSet.contains(t)) {
+	//					kafkaRestService(kafkaRestUrl+"/deleteTopic/" + t, "POST");
+	//					LOG.info(">>>>>>>>>>>> topic={} deleted ", t);
+	//
+	//				}
+	//			}
+	//
+	//		} catch (Exception e1) {
+	//
+	//			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+	//
+	//			throw e1;
+	//		} finally {
+	//
+	//		}
+	//	}
 	private String kafkaRestService(String urlStr, String requestMethod) throws Exception {
 		LOG.info(">>>>>>>>>>>> kafka service urlStr={}", urlStr);
 
@@ -921,50 +921,5 @@ public class PartyContactService {
 			if (httpConn != null ) httpConn.disconnect();
 		}
 	}
-	private void insertKafkaTopics(List<String> insertTopicList) throws Exception{
-		LOG.info(">>>>>>>>>> insertKafkaTopics");
-		String response = kafkaRestService(kafkaRestUrl+"/listTopics", "GET");
-		ObjectMapper mapper = new ObjectMapper();
-		JsonNode jsonNode = mapper.readTree(response);
-		String returnCode = jsonNode.get("returnCode").asText();
-		String topicStr = jsonNode.get("topics").asText();
 
-		List<String> topicList = mapper.readValue(topicStr, new TypeReference<List<String>>() {});
-		Set<String> topicSet = new HashSet<>(topicList);
-
-		LOG.info(">>>>>>>>>> returnCode={}, topicstr={}", returnCode, topicStr);
-
-		for (String topic : insertTopicList) {
-			if (topicSet.contains(topic)) {
-				kafkaRestService(kafkaRestUrl+"/deleteTopic/" + topic, "POST");
-				LOG.info(">>>>>>>>>>>> topic={} deleted ", topic);
-
-			}
-		}
-		for (String topic : insertTopicList) {
-			kafkaRestService(kafkaRestUrl+"/createTopic/"+topic, "POST");
-			LOG.info(">>>>>>>>>>>> topic={} created ", topic);
-		}
-	}
-	private void insertLogminerTable(Connection conn, String etlName, String tableName) throws Exception{
-		LOG.info(">>>>>>>>>> insertLogminerTable");
-		PreparedStatement pstmt = null;
-		String sql = null;
-		try {			
-			sql = "insert into TM_LOGMINER_TABLE (ETL_NAME,TABLE_NAME) values (?,?)";
-			pstmt = conn.prepareStatement(sql);
-			pstmt.setString(1, etlName);
-			pstmt.setString(2, tableName);
-			pstmt.executeUpdate();
-			pstmt.close();
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
-		} finally {
-			if (pstmt != null) pstmt.close();
-		}
-	}
 }

@@ -905,7 +905,7 @@ public class Consumer implements Runnable {
 //		HttpURLConnection httpCon = null;
 		try {
 			
-			cstmt = conn.prepareCall("{call SPHE_HEALTH_CONSUMER_RECEIVED(?,?,?,?)}");
+			cstmt = conn.prepareCall("{call SP_HEALTH_CONSUMER_RECEIVED(?,?,?,?)}");
 			cstmt.setString(1,  PartyContactETL.NAME);
 			cstmt.setString(2,  clientId);
 			cstmt.setTimestamp(3,  heartbeatTime);

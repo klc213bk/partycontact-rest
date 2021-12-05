@@ -23,8 +23,6 @@ public class ConsumerService {
 
 	private static final String CONSUMER_GROUP_1 = "partycontact1";
 
-	@Value("${streaming.etl.name}")
-	private String streamingEtlName;
 
 	@Value("${source.db.driver}")
 	private String sourceDbDriver;
@@ -50,27 +48,27 @@ public class ConsumerService {
 	@Value("${sink.db.password}")
 	private String sinkDbPassword;
 
-	@Value("${logminer.db.driver}")
-	private String logminerDbDriver;
+	@Value("${tglminer.db.driver}")
+	private String tglminerDbDriver;
 
-	@Value("${logminer.db.url}")
-	private String logminerDbUrl;
+	@Value("${tglminer.db.url}")
+	private String tglminerDbUrl;
 
-	@Value("${logminer.db.username}")
-	private String logminerDbUsername;
+	@Value("${tglminer.db.username}")
+	private String tglminerDbUsername;
 
-	@Value("${logminer.db.password}")
-	private String logminerDbPassword;
+	@Value("${tglminer.db.password}")
+	private String tglminerDbPassword;
 
-	@Value("${bootstrap.servers}")
-	private String bootStrapServers;
+	@Value("${kafka.bootstrap.server}")
+	private String kafkaBootstrapServer;
 
-	@Value("${topics}")
-	private String topics;
+	@Value("${kafka.consumer.topics}")
+	private String kafkaConsumerTopics;
 
 	private BasicDataSource sinkConnPool;
 	private BasicDataSource sourceConnPool;
-	private BasicDataSource logminerConnPool;
+	private BasicDataSource tglminerConnPool;
 
 	private ExecutorService executor = null;
 
@@ -93,20 +91,20 @@ public class ConsumerService {
 		sinkConnPool.setDriverClassName(sinkDbDriver);
 		sinkConnPool.setMaxTotal(3);
 
-		logminerConnPool = new BasicDataSource();
-		logminerConnPool.setUrl(logminerDbUrl);
-		logminerConnPool.setDriverClassName(logminerDbDriver);
-		logminerConnPool.setUsername(logminerDbUsername);
-		logminerConnPool.setPassword(logminerDbPassword);
-		logminerConnPool.setMaxTotal(1);
+		tglminerConnPool = new BasicDataSource();
+		tglminerConnPool.setUrl(tglminerDbUrl);
+		tglminerConnPool.setDriverClassName(tglminerDbDriver);
+		tglminerConnPool.setUsername(tglminerDbUsername);
+		tglminerConnPool.setPassword(tglminerDbPassword);
+		tglminerConnPool.setMaxTotal(1);
 
-		String[] topicArr = topics.split(",");
+		String[] topicArr = kafkaConsumerTopics.split(",");
 		List<String> topicList = Arrays.asList(topicArr);
 
 		executor = Executors.newFixedThreadPool(1);
 
 		//		String groupId1 = config.groupId1;
-		consumer = new Consumer(1, CONSUMER_GROUP_1, bootStrapServers, topicList, sourceConnPool, sinkConnPool, logminerConnPool);
+		consumer = new Consumer(1, CONSUMER_GROUP_1, kafkaBootstrapServer, topicList, sourceConnPool, sinkConnPool, tglminerConnPool);
 		executor.submit(consumer);
 
 		LOG.info(">>>>>>>>>>>> started Done!!!");
@@ -129,7 +127,7 @@ public class ConsumerService {
 			try {
 				if (sourceConnPool != null) sourceConnPool.close();
 				if (sinkConnPool != null) sinkConnPool.close();
-				if (logminerConnPool != null) logminerConnPool.close();
+				if (tglminerConnPool != null) tglminerConnPool.close();
 			} catch (Exception e) {
 				LOG.error(">>>message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
 			}

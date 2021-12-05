@@ -52,17 +52,5 @@ public class ConsumerController {
 		return ResponseEntity.status(HttpStatus.OK).body(new Response("0000"));
 	}
 	
-	@GetMapping(value="/consumerState")
-	@ResponseBody
-	public ResponseEntity<KafkaConsumerState> consumerState() throws Exception{
-		long t0 = System.currentTimeMillis();
-		
-		KafkaConsumerState consumerState = consumerService.consumerState();
-		
-		long t1 = System.currentTimeMillis();
-		
-		logger.info(">>>>consumerState finished state={}, span={}", consumerState.getState(), (t1 - t0));
-
-		return ResponseEntity.status(HttpStatus.OK).body(consumerState);
-	}
+	
 }

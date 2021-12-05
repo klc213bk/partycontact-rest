@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.transglobe.streamingetl.partycontact.rest.bean.Response;
+import com.transglobe.streamingetl.partycontact.rest.service.ConsumerService;
 import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService;
 
 @RestController
@@ -73,6 +74,52 @@ public class PartyContactController {
 		}
 		
 		LOG.info(">>>>controller initialize finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	@PostMapping(path="/runPartyContact", produces=MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	public ResponseEntity<Object> runPartyContact() {
+		LOG.info(">>>>controller runPartyContact is called");
+		
+		ObjectNode objectNode = mapper.createObjectNode();
+		
+		try {
+			partyContactService.runPartyContact();
+			objectNode.put("returnCode", "0000");
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+		
+		LOG.info(">>>>controller runPartyContact finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	@PostMapping(path="/stopPartyContact", produces=MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	public ResponseEntity<Object> stopPartyContact() {
+		LOG.info(">>>>controller stopPartyContact is called");
+		
+		ObjectNode objectNode = mapper.createObjectNode();
+		
+		try {
+			partyContactService.stopPartyContact();
+			objectNode.put("returnCode", "0000");
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+		
+		LOG.info(">>>>controller stopPartyContact finished ");
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}

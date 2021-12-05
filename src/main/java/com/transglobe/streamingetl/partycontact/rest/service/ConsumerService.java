@@ -65,6 +65,9 @@ public class ConsumerService {
 
 	@Value("${kafka.consumer.topics}")
 	private String kafkaConsumerTopics;
+	
+	@Value("${heartbeat.table}")
+	private String heartbeatTable;
 
 	private BasicDataSource sinkConnPool;
 	private BasicDataSource sourceConnPool;
@@ -104,7 +107,7 @@ public class ConsumerService {
 		executor = Executors.newFixedThreadPool(1);
 
 		//		String groupId1 = config.groupId1;
-		consumer = new Consumer(1, CONSUMER_GROUP_1, kafkaBootstrapServer, topicList, sourceConnPool, sinkConnPool, tglminerConnPool);
+		consumer = new Consumer(1, CONSUMER_GROUP_1, kafkaBootstrapServer, topicList, sourceConnPool, sinkConnPool, tglminerConnPool, heartbeatTable);
 		executor.submit(consumer);
 
 		LOG.info(">>>>>>>>>>>> started Done!!!");
@@ -149,20 +152,18 @@ public class ConsumerService {
 
 		LOG.info(">>>>>>>>>>>> shutdown done !!!");
 	}
-	public KafkaConsumerState consumerState() throws Exception {
-		LOG.info(">>>>>>>>>>>> consumerState ");
-		KafkaConsumerState consumerState = new KafkaConsumerState(KafkaConsumerState.STOPPED);
+	public boolean isConsumerClosed() throws Exception {
+		LOG.info(">>>>>>>>>>>> isConsumerClosed ");
 		
-		if (executor != null && !executor.isTerminated() && consumer != null) {
-			
-			if (consumer.isConsumerClosed()) {
-				return new KafkaConsumerState(KafkaConsumerState.STOPPED);
+		if (executor == null || executor.isTerminated()) {
+			return true;
+		} else {
+			if (consumer == null) {
+				return true;
 			} else {
-				return new KafkaConsumerState(KafkaConsumerState.RUNNING);
+				return consumer.isConsumerClosed();
 			}
 		}
-		
-		return consumerState;
 
 	}
 }

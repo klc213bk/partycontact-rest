@@ -34,6 +34,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -116,6 +117,9 @@ public class PartyContactService {
 	@Value("${tglminer.db.password}")
 	private String tglminerDbPassword;
 
+	@Autowired
+	private ConsumerService consumerService;
+	
 	public void cleanup() throws Exception {
 		LOG.info(">>>>>>>>>>>> cleanup ");
 		Connection conn = null;
@@ -138,6 +142,38 @@ public class PartyContactService {
 			}
 		} finally {
 			if (conn != null) conn.close();
+		}
+	}
+	public void runPartyContact() throws Exception{
+		
+		LOG.info(">>>>>>> start partycontact consumer ...");
+		consumerService.start();
+		
+		LOG.info(">>>>>>> call applyLogminerSync ...");
+		String applyLogminerSyncUrl = tglminerRestUrl + "/tglminer/applyLogminerSync/" + PartyContactETL.NAME;
+		LOG.info(">>>>>>> applyLogminerSyncUrl={}", applyLogminerSyncUrl); 
+		String response = HttpUtils.restService(applyLogminerSyncUrl, "POST");
+		
+		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+	}
+	public void dropLogminerSync() throws Exception{
+		LOG.info(">>>>>>> call dropLogminerSync ...");
+		String dropLogminerSyncUrl = tglminerRestUrl + "/tglminer/dropLogminerSync/" + PartyContactETL.NAME;
+		LOG.info(">>>>>>> dropLogminerSyncUrl={}", dropLogminerSyncUrl); 
+		String response = HttpUtils.restService(dropLogminerSyncUrl, "POST");
+	}
+
+	public void stopPartyContact() throws Exception {
+		LOG.info(">>>>>>> stopPartyContact ...");
+		
+		LOG.info(">>>>>>> dropLogminerSync");
+		dropLogminerSync();
+		
+		LOG.info(">>>>>>> consumerService.shutdown");
+		consumerService.shutdown();
+		
+		if (!consumerService.isConsumerClosed()) {
+			throw new Exception("consumerService consumer IS NOT Closed.");
 		}
 	}
 	public void initialize() throws Exception{

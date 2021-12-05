@@ -42,8 +42,6 @@ import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 public class Consumer implements Runnable {
 	static final Logger logger = LoggerFactory.getLogger(Consumer.class);
 
-	private static final String TABLE_HE_HEARTBEAT = "HE_HEARTBEAT";
-
 	private static final Integer POLICY_HOLDER_ROLE_TYPE = 1;
 	private static final Integer INSURED_LIST_ROLE_TYPE = 2;
 	private static final Integer CONTRACT_BENE_ROLE_TYPE = 3;
@@ -58,6 +56,8 @@ public class Consumer implements Runnable {
 	private String clientId;
 
 	private List<String> topicList;
+	
+	private String heartbeatTable;
 
 	public Consumer(int id,
 			String groupId,  
@@ -65,13 +65,15 @@ public class Consumer implements Runnable {
 			List<String> topicList,
 			BasicDataSource sourceConnPool,
 			BasicDataSource sinkConnPool,
-			BasicDataSource logminerConnPool
+			BasicDataSource logminerConnPool,
+			String heartbeatTable
 			) {
 		this.sourceConnPool = sourceConnPool;
 		this.sinkConnPool = sinkConnPool;
 		this.logminerConnPool = logminerConnPool;
 		this.clientId = groupId + "-" + id;
 		this.topicList = topicList;
+		this.heartbeatTable = heartbeatTable;
 
 		Properties props = new Properties();
 		props.put("bootstrap.servers", bootstrapServers);
@@ -229,7 +231,7 @@ public class Consumer implements Runnable {
 						|| StringUtils.equals(Table.T_INSURED_LIST_LOG, tableName)
 						|| StringUtils.equals(Table.T_CONTRACT_BENE_LOG, tableName) ) {
 					isTlogtable = true;
-				} else if (StringUtils.equals(TABLE_HE_HEARTBEAT, tableName)) {
+				} else if (StringUtils.equals(heartbeatTable, tableName)) {
 					isHeartbeatTable = true;
 				}
 

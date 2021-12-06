@@ -42,7 +42,9 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.transglobe.streamingetl.partycontact.rest.bean.ApplyLogminerSync;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactETL;
+import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactSPEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactSyncTableEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTableEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactTopicEnum;
@@ -50,6 +52,7 @@ import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
 import com.transglobe.streamingetl.partycontact.rest.util.DbUtils;
 import com.transglobe.streamingetl.partycontact.rest.util.HttpUtils;
+import com.transglobe.streamingetl.partycontact.rest.util.TopicUtils;
 
 
 @Service
@@ -60,12 +63,15 @@ public class PartyContactService {
 
 	private static final int BATCH_SIZE = 3000;
 
+	@Value("${logminer.rest.url}")
+	private String logminerRestUrl;
+
 	@Value("${tglminer.rest.url}")
 	private String tglminerRestUrl;
 
-	//	@Value("${kafka.rest.url}")
-	//	private String kafkaRestUrl;
-	//
+	@Value("${kafka.rest.url}")
+	private String kafkaRestUrl;
+
 	//	@Value("{streaming.etl.host}")
 	//	private String streamingEtlHost;
 	//
@@ -119,42 +125,149 @@ public class PartyContactService {
 
 	@Autowired
 	private ConsumerService consumerService;
-	
+
 	public void cleanup() throws Exception {
 		LOG.info(">>>>>>>>>>>> cleanup ");
 		Connection conn = null;
+		String sql = null;
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
 		try {
 			Class.forName(sinkDbDriver);
 			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
 
-			// connect to tglminer rest to remove etl
-			String removeEtlUrl = tglminerRestUrl + "/init/removeEtl/" + PartyContactETL.NAME;
-			LOG.info(">>>>>>> removeEtlUrl={}", removeEtlUrl);
-//			
-			String response = HttpUtils.restService(removeEtlUrl, "POST");
-			LOG.info(">>>>>>> remove ETL response={}", response);
-
-			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-				if (tableExists(e.getTableName())) {
-					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
-					executeScript(conn, "DROP TABLE " + e.getTableName());
-				} 
+			// drop user SP
+			Set<String> spSet = new HashSet<>();
+			for (PartyContactSPEnum e : PartyContactSPEnum.values()) {
+				spSet.add(e.getSpName());
 			}
+			sql = "select OBJECT_NAME from dba_objects where object_type = 'PROCEDURE' and owner = 'TGLMINER'";
+			pstmt = conn.prepareStatement(sql);
+			rs = pstmt.executeQuery();
+			while (rs.next()) {
+				String sp = rs.getString("OBJECT_NAME");
+				if (spSet.contains(sp)) {
+					DbUtils.executeScript(conn, "DROP PROCEDURE " + sp);
+					LOG.info(">>> SP={} dropped", sp);
+				}
+			}
+			rs.close();
+			pstmt.close();
+
+			// drop user tables
+			Set<String> tbSet = new HashSet<>();
+			for (PartyContactTableEnum tableEnum : PartyContactTableEnum.values()) {
+				tbSet.add(tableEnum.getTableName());
+			}
+			sql = "select TABLE_NAME from USER_TABLES";
+			pstmt = conn.prepareStatement(sql);
+			rs = pstmt.executeQuery();
+			while (rs.next()) {
+				String table = rs.getString("TABLE_NAME");
+				if (tbSet.contains(table)) {
+					DbUtils.executeScript(conn, "DROP TABLE " + table);
+					LOG.info(">>> table={} dropped", table); 
+				}
+			}
+			rs.close();
+			pstmt.close();
+
+			List<String> topicList = new ArrayList<>();
+			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
+				topicList.add(e.getTopic());
+			}
+			Set<String> topicSet = TopicUtils.listTopics();
+			LOG.info(">>> list topics set ={}", String.join(",", topicSet));
+			for (String t : topicList) {
+				if (topicSet.contains(t)) {
+					TopicUtils.deleteTopic(t);
+					LOG.info(">>>>>>>>>>>> topic={} deleted ", t);
+
+				}
+			}
+			
+			//			// connect to tglminer rest to remove etl
+			//			String removeEtlUrl = tglminerRestUrl + "/init/removeEtl/" + PartyContactETL.NAME;
+			//			LOG.info(">>>>>>> removeEtlUrl={}", removeEtlUrl);
+			////			
+			//			String response = HttpUtils.restService(removeEtlUrl, "POST");
+			//			LOG.info(">>>>>>> remove ETL response={}", response);
+			//
+			//			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+			//				if (tableExists(e.getTableName())) {
+			//					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
+			//					executeScript(conn, "DROP TABLE " + e.getTableName());
+			//				} 
+			//			}
 		} finally {
 			if (conn != null) conn.close();
 		}
 	}
 	public void runPartyContact() throws Exception{
-		
+
 		LOG.info(">>>>>>> start partycontact consumer ...");
 		consumerService.start();
-		
+
 		LOG.info(">>>>>>> call applyLogminerSync ...");
 		String applyLogminerSyncUrl = tglminerRestUrl + "/tglminer/applyLogminerSync/" + PartyContactETL.NAME;
 		LOG.info(">>>>>>> applyLogminerSyncUrl={}", applyLogminerSyncUrl); 
 		String response = HttpUtils.restService(applyLogminerSyncUrl, "POST");
-		
+
 		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+	}
+	public String applySyncTables() throws Exception{
+		LOG.info(">>>>>>> applySyncTables ...");
+
+		List<String> tableList = new ArrayList<>();
+		for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
+			tableList.add(e.getSyncTableName());
+		}
+		String tableListStr = String.join(",", tableList);
+
+		ApplyLogminerSync applySync = new ApplyLogminerSync();
+		applySync.setResetOffset(true);
+		applySync.setStartScn(null);
+		applySync.setApplyOrDrop(1);
+		applySync.setTableListStr(tableListStr);
+
+
+		String response = restartLogminerConnector(applySync);
+
+		return response;
+	}
+	public String dropSyncTables() throws Exception{
+		LOG.info(">>>>>>> call dropSyncTables ...");
+
+		List<String> tableList = new ArrayList<>();
+		for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
+			tableList.add(e.getSyncTableName());
+		}
+		String tableListStr = String.join(",", tableList);
+
+		ApplyLogminerSync applySync = new ApplyLogminerSync();
+		applySync.setResetOffset(true);
+		applySync.setStartScn(null);
+		applySync.setApplyOrDrop(-1);
+		applySync.setTableListStr(tableListStr);
+
+		String response = restartLogminerConnector(applySync);
+
+		return response;
+	}
+	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
+		LOG.info(">>>>>>> restartLogminerConnector ...");
+
+		String applySyncUrl = logminerRestUrl + "/logminer/applyLogminerSync";
+
+		ObjectMapper mapper = new ObjectMapper();
+		String jsonStr = mapper.writeValueAsString(applySync);
+
+		LOG.info(">>>>>>> applySyncUrl={}, jsonStr={}", applySyncUrl, jsonStr); 
+		String response = HttpUtils.restPostService(applySyncUrl, jsonStr);
+
+		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+
+		return response;
 	}
 	public void dropLogminerSync() throws Exception{
 		LOG.info(">>>>>>> call dropLogminerSync ...");
@@ -165,13 +278,13 @@ public class PartyContactService {
 
 	public void stopPartyContact() throws Exception {
 		LOG.info(">>>>>>> stopPartyContact ...");
-		
+
 		LOG.info(">>>>>>> dropLogminerSync");
 		dropLogminerSync();
-		
+
 		LOG.info(">>>>>>> consumerService.shutdown");
 		consumerService.shutdown();
-		
+
 		if (!consumerService.isConsumerClosed()) {
 			throw new Exception("consumerService consumer IS NOT Closed.");
 		}
@@ -184,6 +297,29 @@ public class PartyContactService {
 
 			Class.forName(tglminerDbDriver);
 			conn = DriverManager.getConnection(tglminerDbUrl, tglminerDbUsername, tglminerDbPassword);
+
+			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
+				LOG.info(">>>>>>> create TABLE file {}",e.getScriptFile());
+				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
+			}
+
+
+			for (PartyContactSPEnum e : PartyContactSPEnum.values()) {
+				LOG.info(">>>>>>> create SP file {}",e.getScriptFile());
+				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
+			}
+			
+			
+			LOG.info(">>> insert kafka topic");
+			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
+				String topic = e.getTopic();
+				//				String insertTopicUrl = tglminerRestUrl + "/init/createTopic/" + PartyContactETL.NAME + "/" + topic;
+				//				String response = HttpUtils.restService(insertTopicUrl, "POST");
+				String insertTopicUrl = kafkaRestUrl + "/kafka/createTopic/" + topic;
+				String response = HttpUtils.restService(insertTopicUrl, "POST");
+				LOG.info(">>>>>>> kafka topic {} created, response={}", topic,response);
+			}
+			/*
 
 			setupDbObjects(conn);
 
@@ -202,7 +338,7 @@ public class PartyContactService {
 				String topic = e.getTopic();
 				String insertTopicUrl = tglminerRestUrl + "/init/createTopic/" + PartyContactETL.NAME + "/" + topic;
 				String response = HttpUtils.restService(insertTopicUrl, "POST");
-				
+
 				LOG.info(">>>>>>> kafka topic {} inserted, response={}", topic,response);
 			}
 
@@ -213,7 +349,7 @@ public class PartyContactService {
 				String response = HttpUtils.restService(insertLogminerUrl, "POST");
 				LOG.info(">>>>>>> logminer syncTableName {} inserted, response={}", syncTableName,response);
 			}
-			
+			 */
 
 		} finally {
 			if (cstmt != null) cstmt.close();
@@ -228,48 +364,6 @@ public class PartyContactService {
 			DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
 		}
 
-	}
-	
-	public void createTable() throws Exception {
-		LOG.info(">>>>>>>>>>>> createTable ");
-		Connection conn = null;
-		Statement stmt = null;
-		try {
-			Class.forName(sinkDbDriver);
-			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
-
-
-			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-				if (tableExists(e.getTableName())) {
-					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
-					executeScript(conn, "DROP TABLE " + e.getTableName());
-				} 
-				executeSqlScriptFromFile(conn, e.getScriptFile());
-			}
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
-		} finally {
-			if (stmt != null) stmt.close();
-			if (conn != null) conn.close();
-		}
-	}
-	public void dropTable() throws Exception {
-		LOG.info(">>>>>>>>>>>> drop Table ");
-		Connection conn = null;
-		try {
-			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-				if (tableExists(e.getTableName())) {
-					LOG.info(">>>>>>> DROP TABLE {}",e.getTableName());
-					executeScript(conn, "DROP TABLE " + e.getTableName());
-				} 
-			}
-		} finally {
-			if (conn != null) conn.close();
-		}
 	}
 
 	public void truncateTable(String table) throws Exception {
@@ -313,11 +407,6 @@ public class PartyContactService {
 
 		List<Long> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
 
-		LOG.info(">>> add primary key");
-		addPrimaryKey();
-
-		LOG.info(">>> create index");
-		createIndexes();
 
 
 		long count = 0;
@@ -401,38 +490,38 @@ public class PartyContactService {
 			if (conn != null) conn.close();
 		}
 	}
-	public void createIndexes() throws Exception {
-
-		ExecutorService executor = Executors.newFixedThreadPool(8);
-
-		List<String> indexList = new ArrayList<>();
-		indexList.add("ADDRESS_1");
-		indexList.add("EMAIL");
-		indexList.add("MOBILE_TEL");
-		indexList.add("CERTI_CODE");
-		indexList.add("POLICY_ID");
-		indexList.add("UPDATE_TIMESTAMP");
-		indexList.add("ROLE_SCN");
-		indexList.add("ADDRE_SCN");
-
-		List<CompletableFuture<String>> futures = 
-				indexList.stream().map(t ->CompletableFuture.supplyAsync(
-						() -> {		
-							String ret = "";
-							try {
-								ret = createIndex(t);
-							} catch (Exception e) {
-								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
-							}
-							return ret;
-						}
-						, executor)
-						)
-				.collect(Collectors.toList());			
-
-		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
-
-	}
+	//	public void createIndexes() throws Exception {
+	//
+	//		ExecutorService executor = Executors.newFixedThreadPool(8);
+	//
+	//		List<String> indexList = new ArrayList<>();
+	//		indexList.add("ADDRESS_1");
+	//		indexList.add("EMAIL");
+	//		indexList.add("MOBILE_TEL");
+	//		indexList.add("CERTI_CODE");
+	//		indexList.add("POLICY_ID");
+	//		indexList.add("UPDATE_TIMESTAMP");
+	//		indexList.add("ROLE_SCN");
+	//		indexList.add("ADDR_SCN");
+	//
+	//		List<CompletableFuture<String>> futures = 
+	//				indexList.stream().map(t ->CompletableFuture.supplyAsync(
+	//						() -> {		
+	//							String ret = "";
+	//							try {
+	//								ret = createIndex(t);
+	//							} catch (Exception e) {
+	//								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+	//							}
+	//							return ret;
+	//						}
+	//						, executor)
+	//						)
+	//				.collect(Collectors.toList());			
+	//
+	//		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
+	//
+	//	}
 	public String createIndex(String columnName) throws Exception {
 		LOG.info(">>>>>>>>>>>> createIndexes ");
 		Connection conn = null;
@@ -816,45 +905,7 @@ public class PartyContactService {
 			if (stmt != null) stmt.close();
 		}
 	}
-	public boolean tableExists(String table) throws Exception {
 
-		Connection conn = null;
-		PreparedStatement pstmt = null;
-		ResultSet rs = null;
-		String sql = null;
-		boolean exists = false;
-		try {
-
-			Class.forName(sinkDbDriver);
-			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
-
-			sql = "select count(*) CNT from USER_TABLES where TABLE_NAME = ?";
-			pstmt = conn.prepareStatement(sql);
-			pstmt.setString(1, table);
-			rs = pstmt.executeQuery();
-			int cnt = 0;
-			while (rs.next()) {
-				cnt = rs.getInt("CNT");
-			}
-			rs.close();
-			pstmt.close();
-
-			if (cnt > 0) {
-				exists = true;
-			}
-
-		} catch (Exception e1) {
-
-			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
-
-			throw e1;
-		} finally {
-			if (rs != null) rs.close();
-			if (pstmt != null) pstmt.close();
-			if (conn != null) conn.close();
-		}
-		return exists;
-	}
 	//	private void insertTopic(Connection conn, String etlName, String topic) throws Exception{
 	//		LOG.info(">>>>>>>>>> insertTopic,{},{}", etlName, topic);
 	//
@@ -930,32 +981,6 @@ public class PartyContactService {
 	//
 	//		}
 	//	}
-	private String kafkaRestService(String urlStr, String requestMethod) throws Exception {
-		LOG.info(">>>>>>>>>>>> kafka service urlStr={}", urlStr);
 
-		HttpURLConnection httpConn = null;
-		URL url = null;
-		try {
-			url = new URL(urlStr);
-			httpConn = (HttpURLConnection)url.openConnection();
-			httpConn.setRequestMethod(requestMethod);
-			int responseCode = httpConn.getResponseCode();
-			//			LOG.info(">>>>>  responseCode={}",responseCode);
-
-			BufferedReader in = new BufferedReader(new InputStreamReader(httpConn.getInputStream()));
-			StringBuffer response = new StringBuffer();
-			String readLine = null;
-			while ((readLine = in.readLine()) != null) {
-				response.append(readLine);
-			}
-			in.close();
-
-			LOG.info(">>>>> kafkaRestService responsecode={}, response={}", responseCode, response.toString());
-
-			return response.toString();
-		} finally {
-			if (httpConn != null ) httpConn.disconnect();
-		}
-	}
 
 }

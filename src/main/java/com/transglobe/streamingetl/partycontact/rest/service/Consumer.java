@@ -904,7 +904,6 @@ public class Consumer implements Runnable {
 		logger.info(">>>>> updateHealthConsumerReceived  clientId:{}, received={}" , clientId, heartbeatTime);
 
 		CallableStatement cstmt = null;
-//		HttpURLConnection httpCon = null;
 		try {
 			
 			cstmt = conn.prepareCall("{call SP_HEALTH_CONSUMER_RECEIVED(?,?,?,?)}");
@@ -915,24 +914,7 @@ public class Consumer implements Runnable {
 			cstmt.execute();
 			
 			cstmt.close();
-//			
-//			URL url = new URL(urlStr);
-//			httpCon = (HttpURLConnection)url.openConnection();
-//			httpCon.setRequestMethod("POST");
-//			int responseCode = httpCon.getResponseCode();
-//			String readLine = null;
-//			if (httpCon.HTTP_OK == responseCode) {
-//				BufferedReader in = new BufferedReader(new InputStreamReader(httpCon.getInputStream()));
-//				StringBuffer response = new StringBuffer();
-//				while ((readLine = in.readLine()) != null) {
-//					response.append(readLine);
-//				}
-//				in.close();
-//
-//			} else {
-//				logger.error(">>> Response code={}", responseCode);
-//				throw new Exception("Response code="+responseCode);
-//			}
+
 		} catch(Exception e) {
 			logger.error(">>> Response code={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
 			throw e;

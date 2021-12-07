@@ -43,6 +43,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.transglobe.streamingetl.partycontact.rest.bean.ApplyLogminerSync;
+import com.transglobe.streamingetl.partycontact.rest.bean.HealthStatus;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactETL;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactSPEnum;
 import com.transglobe.streamingetl.partycontact.rest.bean.PartyContactSyncTableEnum;
@@ -292,7 +293,8 @@ public class PartyContactService {
 	public void initialize() throws Exception{
 		Connection conn = null;
 
-		CallableStatement cstmt = null;
+		PreparedStatement pstmt = null;
+		String sql = null;
 		try {
 
 			Class.forName(tglminerDbDriver);
@@ -309,59 +311,29 @@ public class PartyContactService {
 				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
 			}
 			
+			LOG.info(">>> insert initial data");
+			sql = "insert into TM_HEALTH_STATUS (ETL_NAME,HEALTH_STATE,UPDATE_TIMESTAMP) \n" +
+					" values (?,?,?)";
+			pstmt = conn.prepareStatement(sql);
+			pstmt.setString(1, PartyContactETL.NAME);
+			pstmt.setString(2, HealthStatus.HealthState.STANDBY.name());
+			pstmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
+			pstmt.executeUpdate();
+			pstmt.close();
+			
 			
 			LOG.info(">>> insert kafka topic");
 			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
 				String topic = e.getTopic();
-				//				String insertTopicUrl = tglminerRestUrl + "/init/createTopic/" + PartyContactETL.NAME + "/" + topic;
-				//				String response = HttpUtils.restService(insertTopicUrl, "POST");
 				String insertTopicUrl = kafkaRestUrl + "/kafka/createTopic/" + topic;
 				String response = HttpUtils.restService(insertTopicUrl, "POST");
 				LOG.info(">>>>>>> kafka topic {} created, response={}", topic,response);
 			}
-			/*
 
-			setupDbObjects(conn);
-
-			// insert etl
-			LOG.info(">>> insert etl name ");
-			cstmt = conn.prepareCall("{call SP_INS_ETL_NAME(?,?,?)}");
-
-			cstmt.setString(1,  PartyContactETL.CAT);
-			cstmt.setString(2,  PartyContactETL.NAME);
-			cstmt.setString(3,  PartyContactETL.NOTE);
-			cstmt.execute();
-			cstmt.close();
-
-			LOG.info(">>> insert kafka topic");
-			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
-				String topic = e.getTopic();
-				String insertTopicUrl = tglminerRestUrl + "/init/createTopic/" + PartyContactETL.NAME + "/" + topic;
-				String response = HttpUtils.restService(insertTopicUrl, "POST");
-
-				LOG.info(">>>>>>> kafka topic {} inserted, response={}", topic,response);
-			}
-
-			LOG.info(">>> insert logminer table");
-			for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
-				String syncTableName = e.getSyncTableName();
-				String insertLogminerUrl = tglminerRestUrl + "/init/insertLogminerSyncTable/" + PartyContactETL.NAME + "/" + syncTableName;
-				String response = HttpUtils.restService(insertLogminerUrl, "POST");
-				LOG.info(">>>>>>> logminer syncTableName {} inserted, response={}", syncTableName,response);
-			}
-			 */
 
 		} finally {
-			if (cstmt != null) cstmt.close();
+			if (pstmt != null) pstmt.close();
 			if (conn != null) conn.close();
-		}
-
-	}
-	private void setupDbObjects(Connection conn) throws Exception {
-
-		for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
-			LOG.info(">>>>>>> create TABLE file {}",e.getScriptFile());
-			DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
 		}
 
 	}

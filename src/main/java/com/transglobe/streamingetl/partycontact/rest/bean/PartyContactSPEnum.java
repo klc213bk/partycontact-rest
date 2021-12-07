@@ -1,7 +1,6 @@
 package com.transglobe.streamingetl.partycontact.rest.bean;
 
 public enum PartyContactSPEnum {
-	GET_STREAMING_ETL_STATE("GET_STREAMING_ETL_STATE", "createSP-GET_STREAMING_ETL_STATE.sql");
 	;
 	
 	private String spName;

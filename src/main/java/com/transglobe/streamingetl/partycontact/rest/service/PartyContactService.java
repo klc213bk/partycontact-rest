@@ -227,7 +227,7 @@ public class PartyContactService {
 		String tableListStr = String.join(",", tableList);
 
 		ApplyLogminerSync applySync = new ApplyLogminerSync();
-		applySync.setResetOffset(true);
+		applySync.setResetOffset(false);
 		applySync.setStartScn(null);
 		applySync.setApplyOrDrop(1);
 		applySync.setTableListStr(tableListStr);

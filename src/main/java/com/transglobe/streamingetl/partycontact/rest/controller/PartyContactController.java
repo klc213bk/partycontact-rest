@@ -16,10 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.transglobe.streamingetl.partycontact.rest.bean.HealthStatus;
 import com.transglobe.streamingetl.partycontact.rest.bean.Response;
 import com.transglobe.streamingetl.partycontact.rest.service.ConsumerService;
-import com.transglobe.streamingetl.partycontact.rest.service.PartyContactHealth;
 import com.transglobe.streamingetl.partycontact.rest.service.PartyContactService;
 
 @RestController
@@ -30,39 +28,11 @@ public class PartyContactController {
 
 	@Autowired
 	private PartyContactService partyContactService;
-	
-	@Autowired
-	private PartyContactHealth healthService;
 
 	@Autowired
 	private ObjectMapper mapper;
 	
-	@GetMapping(path="/getHealthStatus", produces=MediaType.APPLICATION_JSON_VALUE)
-	@ResponseBody
-	public ResponseEntity<Object> getHealthStatus() {
-		LOG.info(">>>>controller cleanup is called");
-		
-		ObjectNode objectNode = mapper.createObjectNode();
-		
-		try {
-			HealthStatus healthStatus = healthService.getHealthStatus();
-			objectNode.put("returnCode", "0000");
-			objectNode.put("etlName", healthStatus.getEtlName());
-			objectNode.put("healthState", healthStatus.getHealthState().name());
-			objectNode.put("updateTimestamp", healthStatus.getUpdateTimestamp().getTime());
-		} catch (Exception e) {
-			String errMsg = ExceptionUtils.getMessage(e);
-			String stackTrace = ExceptionUtils.getStackTrace(e);
-			objectNode.put("returnCode", "-9999");
-			objectNode.put("errMsg", errMsg);
-			objectNode.put("returnCode", stackTrace);
-			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
-		}
-		
-		LOG.info(">>>>controller cleanup finished ");
-		
-		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
-	}
+	
 	@PostMapping(path="/cleanup", produces=MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public ResponseEntity<Object> cleanup() {
@@ -109,29 +79,29 @@ public class PartyContactController {
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
-	@PostMapping(path="/runPartyContact", produces=MediaType.APPLICATION_JSON_VALUE)
-	@ResponseBody
-	public ResponseEntity<Object> runPartyContact() {
-		LOG.info(">>>>controller runPartyContact is called");
-		
-		ObjectNode objectNode = mapper.createObjectNode();
-		
-		try {
-			partyContactService.runPartyContact();
-			objectNode.put("returnCode", "0000");
-		} catch (Exception e) {
-			String errMsg = ExceptionUtils.getMessage(e);
-			String stackTrace = ExceptionUtils.getStackTrace(e);
-			objectNode.put("returnCode", "-9999");
-			objectNode.put("errMsg", errMsg);
-			objectNode.put("returnCode", stackTrace);
-			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
-		}
-		
-		LOG.info(">>>>controller runPartyContact finished ");
-		
-		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
-	}
+//	@PostMapping(path="/runPartyContact", produces=MediaType.APPLICATION_JSON_VALUE)
+//	@ResponseBody
+//	public ResponseEntity<Object> runPartyContact() {
+//		LOG.info(">>>>controller runPartyContact is called");
+//		
+//		ObjectNode objectNode = mapper.createObjectNode();
+//		
+//		try {
+//			partyContactService.runPartyContact();
+//			objectNode.put("returnCode", "0000");
+//		} catch (Exception e) {
+//			String errMsg = ExceptionUtils.getMessage(e);
+//			String stackTrace = ExceptionUtils.getStackTrace(e);
+//			objectNode.put("returnCode", "-9999");
+//			objectNode.put("errMsg", errMsg);
+//			objectNode.put("returnCode", stackTrace);
+//			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+//		}
+//		
+//		LOG.info(">>>>controller runPartyContact finished ");
+//		
+//		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+//	}
 	@PostMapping(path="/applySyncTables", produces=MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
 	public ResponseEntity<Object> applySyncTables() {
@@ -180,30 +150,30 @@ public class PartyContactController {
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
-	@PostMapping(path="/stopPartyContact", produces=MediaType.APPLICATION_JSON_VALUE)
-	@ResponseBody
-	public ResponseEntity<Object> stopPartyContact() {
-		LOG.info(">>>>controller stopPartyContact is called");
-		
-		ObjectNode objectNode = mapper.createObjectNode();
-		
-		try {
-			partyContactService.stopPartyContact();
-			objectNode.put("returnCode", "0000");
-		} catch (Exception e) {
-			String errMsg = ExceptionUtils.getMessage(e);
-			String stackTrace = ExceptionUtils.getStackTrace(e);
-			objectNode.put("returnCode", "-9999");
-			objectNode.put("errMsg", errMsg);
-			objectNode.put("returnCode", stackTrace);
-			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
-		}
-		
-		LOG.info(">>>>controller stopPartyContact finished ");
-		
-		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
-	}
-	
+//	@PostMapping(path="/stopPartyContact", produces=MediaType.APPLICATION_JSON_VALUE)
+//	@ResponseBody
+//	public ResponseEntity<Object> stopPartyContact() {
+//		LOG.info(">>>>controller stopPartyContact is called");
+//		
+//		ObjectNode objectNode = mapper.createObjectNode();
+//		
+//		try {
+//			partyContactService.stopPartyContact();
+//			objectNode.put("returnCode", "0000");
+//		} catch (Exception e) {
+//			String errMsg = ExceptionUtils.getMessage(e);
+//			String stackTrace = ExceptionUtils.getStackTrace(e);
+//			objectNode.put("returnCode", "-9999");
+//			objectNode.put("errMsg", errMsg);
+//			objectNode.put("returnCode", stackTrace);
+//			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+//		}
+//		
+//		LOG.info(">>>>controller stopPartyContact finished ");
+//		
+//		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+//	}
+//	
 	
 	@PostMapping(value="/truncateTable/{table}")
 	@ResponseBody
@@ -226,50 +196,7 @@ public class PartyContactController {
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
-	@PostMapping(value="/startHealthChecker")
-	@ResponseBody
-	public ResponseEntity<Object> startHealthChecker() throws Exception{
-		LOG.info(">>>>startHealthChecker ");
-		ObjectNode objectNode = mapper.createObjectNode();
-		try {
-
-			healthService.startHealthChecker();
-			objectNode.put("returnCode", "0000");
-		} catch (Exception e) {
-			String errMsg = ExceptionUtils.getMessage(e);
-			String stackTrace = ExceptionUtils.getStackTrace(e);
-			objectNode.put("returnCode", "-9999");
-			objectNode.put("errMsg", errMsg);
-			objectNode.put("returnCode", stackTrace);
-			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
-		}
-
-		LOG.info(">>>>controller startHealthChecker finished ");
-		
-		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
-	}
-	@PostMapping(value="/stopHealthChecker")
-	@ResponseBody
-	public ResponseEntity<Object> stopHealthChecker() throws Exception{
-		LOG.info(">>>>stopHealthChecker ");
-		ObjectNode objectNode = mapper.createObjectNode();
-		try {
-
-			healthService.stopHealthChecker();
-			objectNode.put("returnCode", "0000");
-		} catch (Exception e) {
-			String errMsg = ExceptionUtils.getMessage(e);
-			String stackTrace = ExceptionUtils.getStackTrace(e);
-			objectNode.put("returnCode", "-9999");
-			objectNode.put("errMsg", errMsg);
-			objectNode.put("returnCode", stackTrace);
-			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
-		}
-
-		LOG.info(">>>>controller stopHealthChecker finished ");
-		
-		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
-	}
+	
 	@PostMapping(value="/loadData/{table}")
 	@ResponseBody
 	public ResponseEntity<Object> loadData(@PathVariable("table") String table) throws Exception{

@@ -205,18 +205,18 @@ public class PartyContactService {
 			if (conn != null) conn.close();
 		}
 	}
-	public void runPartyContact() throws Exception{
-
-		LOG.info(">>>>>>> start partycontact consumer ...");
-		consumerService.start();
-
-		LOG.info(">>>>>>> call applyLogminerSync ...");
-		String applyLogminerSyncUrl = tglminerRestUrl + "/tglminer/applyLogminerSync/" + PartyContactETL.NAME;
-		LOG.info(">>>>>>> applyLogminerSyncUrl={}", applyLogminerSyncUrl); 
-		String response = HttpUtils.restService(applyLogminerSyncUrl, "POST");
-
-		LOG.info(">>>>>>> applyLogminerSync response={}", response);
-	}
+//	public void runPartyContact() throws Exception{
+//
+//		LOG.info(">>>>>>> start partycontact consumer ...");
+//		consumerService.start();
+//
+//		LOG.info(">>>>>>> call applyLogminerSync ...");
+//		String applyLogminerSyncUrl = tglminerRestUrl + "/tglminer/applyLogminerSync/" + PartyContactETL.NAME;
+//		LOG.info(">>>>>>> applyLogminerSyncUrl={}", applyLogminerSyncUrl); 
+//		String response = HttpUtils.restService(applyLogminerSyncUrl, "POST");
+//
+//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+//	}
 	public String applySyncTables() throws Exception{
 		LOG.info(">>>>>>> applySyncTables ...");
 
@@ -278,19 +278,22 @@ public class PartyContactService {
 		String response = HttpUtils.restService(dropLogminerSyncUrl, "POST");
 	}
 
-	public void stopPartyContact() throws Exception {
-		LOG.info(">>>>>>> stopPartyContact ...");
-
-		LOG.info(">>>>>>> dropLogminerSync");
-		dropLogminerSync();
-
-		LOG.info(">>>>>>> consumerService.shutdown");
-		consumerService.shutdown();
-
-		if (!consumerService.isConsumerClosed()) {
-			throw new Exception("consumerService consumer IS NOT Closed.");
-		}
-	}
+//	public void stopPartyContact() throws Exception {
+//		LOG.info(">>>>>>> stopPartyContact ...");
+//
+//		LOG.info(">>>>>>> dropLogminerSync");
+//		try {
+//			dropLogminerSync();
+//		} catch (Exception e) {
+//			LOG.error(">>> errMsg={], stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+//		}
+//		LOG.info(">>>>>>> consumerService.shutdown");
+//		consumerService.shutdown();
+//
+//		if (!consumerService.isConsumerClosed()) {
+//			throw new Exception("consumerService consumer IS NOT Closed.");
+//		}
+//	}
 	public void initialize() throws Exception{
 		Connection conn = null;
 
@@ -300,17 +303,19 @@ public class PartyContactService {
 
 			Class.forName(tglminerDbDriver);
 			conn = DriverManager.getConnection(tglminerDbUrl, tglminerDbUsername, tglminerDbPassword);
-
+			conn.setAutoCommit(false);
+			
 			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
 				LOG.info(">>>>>>> create TABLE file {}",e.getScriptFile());
 				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
 			}
-
+			conn.commit();
 
 			for (PartyContactSPEnum e : PartyContactSPEnum.values()) {
 				LOG.info(">>>>>>> create SP file {}",e.getScriptFile());
 				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
 			}
+			conn.commit();
 			
 			LOG.info(">>> insert initial data");
 			sql = "insert into TM_HEALTH_STATUS (ETL_NAME,HEALTH_STATE,UPDATE_TIMESTAMP) \n" +
@@ -321,7 +326,7 @@ public class PartyContactService {
 			pstmt.setTimestamp(3, new Timestamp(System.currentTimeMillis()));
 			pstmt.executeUpdate();
 			pstmt.close();
-			
+			conn.commit();
 			
 			LOG.info(">>> insert kafka topic");
 			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
@@ -330,7 +335,7 @@ public class PartyContactService {
 				String response = HttpUtils.restService(insertTopicUrl, "POST");
 				LOG.info(">>>>>>> kafka topic {} created, response={}", topic,response);
 			}
-
+		
 
 		} finally {
 			if (pstmt != null) pstmt.close();

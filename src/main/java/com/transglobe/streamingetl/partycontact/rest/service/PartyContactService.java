@@ -53,6 +53,7 @@ import com.transglobe.streamingetl.partycontact.rest.bean.Table;
 import com.transglobe.streamingetl.partycontact.rest.service.bean.LoadBean;
 import com.transglobe.streamingetl.partycontact.rest.util.DbUtils;
 import com.transglobe.streamingetl.partycontact.rest.util.HttpUtils;
+import com.transglobe.streamingetl.partycontact.rest.util.LogminerUtils;
 import com.transglobe.streamingetl.partycontact.rest.util.TopicUtils;
 
 
@@ -232,7 +233,7 @@ public class PartyContactService {
 		applySync.setTableListStr(tableListStr);
 
 
-		String response = restartLogminerConnector(applySync);
+		String response = LogminerUtils.restartLogminerConnector(applySync);
 
 		return response;
 	}
@@ -251,25 +252,25 @@ public class PartyContactService {
 		applySync.setApplyOrDrop(-1);
 		applySync.setTableListStr(tableListStr);
 
-		String response = restartLogminerConnector(applySync);
+		String response = LogminerUtils.restartLogminerConnector(applySync);
 
 		return response;
 	}
-	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
-		LOG.info(">>>>>>> restartLogminerConnector ...");
-
-		String applySyncUrl = logminerRestUrl + "/logminer/applyLogminerSync";
-
-		ObjectMapper mapper = new ObjectMapper();
-		String jsonStr = mapper.writeValueAsString(applySync);
-
-		LOG.info(">>>>>>> applySyncUrl={}, jsonStr={}", applySyncUrl, jsonStr); 
-		String response = HttpUtils.restPostService(applySyncUrl, jsonStr);
-
-		LOG.info(">>>>>>> applyLogminerSync response={}", response);
-
-		return response;
-	}
+//	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
+//		LOG.info(">>>>>>> restartLogminerConnector ...");
+//
+//		String applySyncUrl = logminerRestUrl + "/logminer/applyLogminerSync";
+//
+//		ObjectMapper mapper = new ObjectMapper();
+//		String jsonStr = mapper.writeValueAsString(applySync);
+//
+//		LOG.info(">>>>>>> applySyncUrl={}, jsonStr={}", applySyncUrl, jsonStr); 
+//		String response = HttpUtils.restPostService(applySyncUrl, jsonStr);
+//
+//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+//
+//		return response;
+//	}
 	public void dropLogminerSync() throws Exception{
 		LOG.info(">>>>>>> call dropLogminerSync ...");
 		String dropLogminerSyncUrl = tglminerRestUrl + "/tglminer/dropLogminerSync/" + PartyContactETL.NAME;

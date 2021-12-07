@@ -61,6 +61,8 @@ public class PartyContactHealth {
 
 	private AtomicBoolean logminerStarting = new AtomicBoolean(false);
 
+	private int restartNOLoadData = 0;
+
 	public HealthStatus getHealthStatus() {
 		return healthStatus;
 	}
@@ -81,7 +83,7 @@ public class PartyContactHealth {
 		PreparedStatement pstmt = null;
 		String sql = null;
 		try {
-			
+
 			HealthState healthState = HealthState.STANDBY;
 			if (nowms - lastReceivedMs < 5 * 60 * 1000 ) {
 				healthState = HealthState.ACTIVE;
@@ -131,22 +133,45 @@ public class PartyContactHealth {
 						LOG.info(">>>>>>>>>>>> Logminer is still starting ... skip");
 
 					} else {
-						LOG.info(">>>>>>>>>>>> RESTARTING CONNECTOR with resetoffset = false, no apply/drop sync tables");
 						logminerStarting.set(true);
 
-						String tableListStr = "";
+						if (restartNOLoadData < 3) {
+							LOG.info(">>>>>>>>>>>> RESTARTING CONNECTOR with No realod data, resetoffset = false, no apply/drop sync tables");
+							
+							String tableListStr = "";
 
-						ApplyLogminerSync applySync = new ApplyLogminerSync();
-						applySync.setResetOffset(false);
-						applySync.setStartScn(null);
-						applySync.setApplyOrDrop(0);
-						applySync.setTableListStr(tableListStr);
+							ApplyLogminerSync applySync = new ApplyLogminerSync();
+							applySync.setResetOffset(false);
+							applySync.setStartScn(null);
+							applySync.setApplyOrDrop(0);
+							applySync.setTableListStr(tableListStr);
 
-						String response = LogminerUtils.restartLogminerConnector(applySync);
+							String response = LogminerUtils.restartLogminerConnector(applySync);
 
-						logminerStarting.set(false);
-						LOG.info(">>>>>>>>>>>> restartLogminerConnector status={}", response);
-
+							restartNOLoadData++;
+							
+							logminerStarting.set(false);
+							LOG.info(">>>>>>>>>>>> restartLogminerConnector status={}", response);
+						} else {
+							LOG.info(">>>>>>>>>>>> RESTARTING CONNECTOR with realod data, resetoffset = true");
+							//LOG.info(">>>>>>>>>>>> stop connector");
+							
+							// stop partycontact consumer
+							
+							// stop health
+							
+							
+							// truncate T_PARTY_CONTACT table
+							
+							// disable primary and indexes
+							
+							// load data
+							
+							// enable primary and indexes
+							
+							
+							
+						}
 					}
 				}  else {
 					LOG.info(">>>>>>>>>>>> logminerLastReceived < 5 min or time to prev start < 10 min, Chack later.");

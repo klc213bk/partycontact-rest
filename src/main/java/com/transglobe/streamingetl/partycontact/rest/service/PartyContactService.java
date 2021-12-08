@@ -187,7 +187,7 @@ public class PartyContactService {
 
 				}
 			}
-			
+
 			//			// connect to tglminer rest to remove etl
 			//			String removeEtlUrl = tglminerRestUrl + "/init/removeEtl/" + PartyContactETL.NAME;
 			//			LOG.info(">>>>>>> removeEtlUrl={}", removeEtlUrl);
@@ -205,20 +205,20 @@ public class PartyContactService {
 			if (conn != null) conn.close();
 		}
 	}
-//	public void runPartyContact() throws Exception{
-//
-//		LOG.info(">>>>>>> start partycontact consumer ...");
-//		consumerService.start();
-//
-//		LOG.info(">>>>>>> call applyLogminerSync ...");
-//		String applyLogminerSyncUrl = tglminerRestUrl + "/tglminer/applyLogminerSync/" + PartyContactETL.NAME;
-//		LOG.info(">>>>>>> applyLogminerSyncUrl={}", applyLogminerSyncUrl); 
-//		String response = HttpUtils.restService(applyLogminerSyncUrl, "POST");
-//
-//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
-//	}
-	public String applySyncTables() throws Exception{
-		LOG.info(">>>>>>> applySyncTables ...");
+	//	public void runPartyContact() throws Exception{
+	//
+	//		LOG.info(">>>>>>> start partycontact consumer ...");
+	//		consumerService.start();
+	//
+	//		LOG.info(">>>>>>> call applyLogminerSync ...");
+	//		String applyLogminerSyncUrl = tglminerRestUrl + "/tglminer/applyLogminerSync/" + PartyContactETL.NAME;
+	//		LOG.info(">>>>>>> applyLogminerSyncUrl={}", applyLogminerSyncUrl); 
+	//		String response = HttpUtils.restService(applyLogminerSyncUrl, "POST");
+	//
+	//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+	//	}
+	public String applyLogminerSync() throws Exception{
+		LOG.info(">>>>>>> applyLogminerSync ...");
 
 		List<String> tableList = new ArrayList<>();
 		for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
@@ -237,8 +237,8 @@ public class PartyContactService {
 
 		return response;
 	}
-	public String dropSyncTables() throws Exception{
-		LOG.info(">>>>>>> call dropSyncTables ...");
+	public String dropLogminerSync() throws Exception{
+		LOG.info(">>>>>>> call dropLogminerSync ...");
 
 		List<String> tableList = new ArrayList<>();
 		for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
@@ -247,7 +247,7 @@ public class PartyContactService {
 		String tableListStr = String.join(",", tableList);
 
 		ApplyLogminerSync applySync = new ApplyLogminerSync();
-		applySync.setResetOffset(true);
+		applySync.setResetOffset(false);
 		applySync.setStartScn(null);
 		applySync.setApplyOrDrop(-1);
 		applySync.setTableListStr(tableListStr);
@@ -256,44 +256,44 @@ public class PartyContactService {
 
 		return response;
 	}
-//	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
-//		LOG.info(">>>>>>> restartLogminerConnector ...");
-//
-//		String applySyncUrl = logminerRestUrl + "/logminer/applyLogminerSync";
-//
-//		ObjectMapper mapper = new ObjectMapper();
-//		String jsonStr = mapper.writeValueAsString(applySync);
-//
-//		LOG.info(">>>>>>> applySyncUrl={}, jsonStr={}", applySyncUrl, jsonStr); 
-//		String response = HttpUtils.restPostService(applySyncUrl, jsonStr);
-//
-//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
-//
-//		return response;
+	//	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
+	//		LOG.info(">>>>>>> restartLogminerConnector ...");
+	//
+	//		String applySyncUrl = logminerRestUrl + "/logminer/applyLogminerSync";
+	//
+	//		ObjectMapper mapper = new ObjectMapper();
+	//		String jsonStr = mapper.writeValueAsString(applySync);
+	//
+	//		LOG.info(">>>>>>> applySyncUrl={}, jsonStr={}", applySyncUrl, jsonStr); 
+	//		String response = HttpUtils.restPostService(applySyncUrl, jsonStr);
+	//
+	//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
+	//
+	//		return response;
+	//	}
+//	public void dropLogminerSync() throws Exception{
+//		LOG.info(">>>>>>> call dropLogminerSync ...");
+//		String dropLogminerSyncUrl = tglminerRestUrl + "/tglminer/dropLogminerSync/" + PartyContactETL.NAME;
+//		LOG.info(">>>>>>> dropLogminerSyncUrl={}", dropLogminerSyncUrl); 
+//		String response = HttpUtils.restService(dropLogminerSyncUrl, "POST");
 //	}
-	public void dropLogminerSync() throws Exception{
-		LOG.info(">>>>>>> call dropLogminerSync ...");
-		String dropLogminerSyncUrl = tglminerRestUrl + "/tglminer/dropLogminerSync/" + PartyContactETL.NAME;
-		LOG.info(">>>>>>> dropLogminerSyncUrl={}", dropLogminerSyncUrl); 
-		String response = HttpUtils.restService(dropLogminerSyncUrl, "POST");
-	}
 
-//	public void stopPartyContact() throws Exception {
-//		LOG.info(">>>>>>> stopPartyContact ...");
-//
-//		LOG.info(">>>>>>> dropLogminerSync");
-//		try {
-//			dropLogminerSync();
-//		} catch (Exception e) {
-//			LOG.error(">>> errMsg={], stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
-//		}
-//		LOG.info(">>>>>>> consumerService.shutdown");
-//		consumerService.shutdown();
-//
-//		if (!consumerService.isConsumerClosed()) {
-//			throw new Exception("consumerService consumer IS NOT Closed.");
-//		}
-//	}
+	//	public void stopPartyContact() throws Exception {
+	//		LOG.info(">>>>>>> stopPartyContact ...");
+	//
+	//		LOG.info(">>>>>>> dropLogminerSync");
+	//		try {
+	//			dropLogminerSync();
+	//		} catch (Exception e) {
+	//			LOG.error(">>> errMsg={], stacktrace={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+	//		}
+	//		LOG.info(">>>>>>> consumerService.shutdown");
+	//		consumerService.shutdown();
+	//
+	//		if (!consumerService.isConsumerClosed()) {
+	//			throw new Exception("consumerService consumer IS NOT Closed.");
+	//		}
+	//	}
 	public void initialize() throws Exception{
 		Connection conn = null;
 
@@ -304,7 +304,7 @@ public class PartyContactService {
 			Class.forName(tglminerDbDriver);
 			conn = DriverManager.getConnection(tglminerDbUrl, tglminerDbUsername, tglminerDbPassword);
 			conn.setAutoCommit(false);
-			
+
 			for (PartyContactTableEnum e : PartyContactTableEnum.values()) {
 				LOG.info(">>>>>>> create TABLE file {}",e.getScriptFile());
 				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
@@ -316,7 +316,7 @@ public class PartyContactService {
 				DbUtils.executeSqlScriptFromFile(conn, e.getScriptFile());
 			}
 			conn.commit();
-			
+
 			LOG.info(">>> insert initial data");
 			sql = "insert into TM_HEALTH_STATUS (ETL_NAME,HEALTH_STATE,UPDATE_TIMESTAMP) \n" +
 					" values (?,?,?)";
@@ -327,7 +327,7 @@ public class PartyContactService {
 			pstmt.executeUpdate();
 			pstmt.close();
 			conn.commit();
-			
+
 			LOG.info(">>> insert kafka topic");
 			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
 				String topic = e.getTopic();
@@ -335,7 +335,7 @@ public class PartyContactService {
 				String response = HttpUtils.restService(insertTopicUrl, "POST");
 				LOG.info(">>>>>>> kafka topic {} created, response={}", topic,response);
 			}
-		
+
 
 		} finally {
 			if (pstmt != null) pstmt.close();
@@ -468,40 +468,151 @@ public class PartyContactService {
 			if (conn != null) conn.close();
 		}
 	}
-	//	public void createIndexes() throws Exception {
-	//
-	//		ExecutorService executor = Executors.newFixedThreadPool(8);
-	//
-	//		List<String> indexList = new ArrayList<>();
-	//		indexList.add("ADDRESS_1");
-	//		indexList.add("EMAIL");
-	//		indexList.add("MOBILE_TEL");
-	//		indexList.add("CERTI_CODE");
-	//		indexList.add("POLICY_ID");
-	//		indexList.add("UPDATE_TIMESTAMP");
-	//		indexList.add("ROLE_SCN");
-	//		indexList.add("ADDR_SCN");
-	//
-	//		List<CompletableFuture<String>> futures = 
-	//				indexList.stream().map(t ->CompletableFuture.supplyAsync(
-	//						() -> {		
-	//							String ret = "";
-	//							try {
-	//								ret = createIndex(t);
-	//							} catch (Exception e) {
-	//								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
-	//							}
-	//							return ret;
-	//						}
-	//						, executor)
-	//						)
-	//				.collect(Collectors.toList());			
-	//
-	//		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
-	//
-	//	}
+	public void disablePrimaryKey() throws Exception {
+		LOG.info(">>>>>>>>>>>> disablePrimaryKey ");
+		Connection conn = null;
+		Statement stmt = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
+
+			executeScript(conn, "ALTER TABLE  " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " DISABLE CONSTRAINT PK_T_PARTY_CONTACT");
+
+			LOG.info(">>>>>>>>>>>> disablePrimaryKey done!!! ");
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (stmt != null) stmt.close();
+			if (conn != null) conn.close();
+		}
+	}
+	public void enablePrimaryKey() throws Exception {
+		LOG.info(">>>>>>>>>>>> disablePrimaryKey ");
+		Connection conn = null;
+		Statement stmt = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
+
+			executeScript(conn, "ALTER TABLE  " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " ENABLE CONSTRAINT PK_T_PARTY_CONTACT");
+
+			LOG.info(">>>>>>>>>>>> enablePrimaryKey done!!! ");
+		} catch (Exception e1) {
+
+			LOG.error(">>>>> Error!!!, error msg={}, stacetrace={}", ExceptionUtils.getMessage(e1), ExceptionUtils.getStackTrace(e1));
+
+			throw e1;
+		} finally {
+			if (stmt != null) stmt.close();
+			if (conn != null) conn.close();
+		}
+	}
+	public void createIndexes() throws Exception {
+
+		ExecutorService executor = Executors.newFixedThreadPool(8);
+
+		List<String> indexList = new ArrayList<>();
+		indexList.add("ADDRESS_1");
+		indexList.add("EMAIL");
+		indexList.add("MOBILE_TEL");
+		indexList.add("CERTI_CODE");
+		indexList.add("POLICY_ID");
+		indexList.add("UPDATE_TIMESTAMP");
+		indexList.add("ROLE_SCN");
+		indexList.add("ADDR_SCN");
+
+		List<CompletableFuture<String>> futures = 
+				indexList.stream().map(t ->CompletableFuture.supplyAsync(
+						() -> {		
+							String ret = "";
+							try {
+								ret = createIndex(t);
+							} catch (Exception e) {
+								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+							}
+							return ret;
+						}
+						, executor)
+						)
+				.collect(Collectors.toList());			
+
+		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
+
+	}
+	public void dropIndexes() throws Exception {
+
+		ExecutorService executor = Executors.newFixedThreadPool(8);
+
+		List<String> indexList = new ArrayList<>();
+		indexList.add("ADDRESS_1");
+		indexList.add("EMAIL");
+		indexList.add("MOBILE_TEL");
+		indexList.add("CERTI_CODE");
+		indexList.add("POLICY_ID");
+		indexList.add("UPDATE_TIMESTAMP");
+		indexList.add("ROLE_SCN");
+		indexList.add("ADDR_SCN");
+
+		List<CompletableFuture<String>> futures = 
+				indexList.stream().map(t ->CompletableFuture.supplyAsync(
+						() -> {		
+							String ret = "";
+							try {
+								ret = dropIndex(t);
+							} catch (Exception e) {
+								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
+							}
+							return ret;
+						}
+						, executor)
+						)
+				.collect(Collectors.toList());			
+
+		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
+
+	}
+	public String dropIndex(String columnName) throws Exception {
+		LOG.info(">>>>>>>>>>>> dropIndex ");
+		Connection conn = null;
+		try {
+			Class.forName(sinkDbDriver);
+			conn = DriverManager.getConnection(sinkDbUrl, sinkDbUsername, sinkDbPassword);
+
+			if ("ADDRESS_1".equalsIgnoreCase(columnName)) {
+				executeScript(conn, "DROP INDEX IDX_T_PARTY_CONTACT_ADDR1 ");
+				LOG.info(">>>>>>>>>>>> dropIndex for addr1 done!!! ");
+			} else if ("EMAIL".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_EMAIL");
+				LOG.info(">>>>>>>>>>>> dropIndex for email done!!! ");
+			}  else if ("MOBILE_TEL".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_MOBILE_TEL");
+				LOG.info(">>>>>>>>>>>> dropIndex for mobile_tel done!!! ");
+			} else if ("CERTI_CODE".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_CERTI_CODE");
+				LOG.info(">>>>>>>>>>>> dropIndex for certi_code done!!! ");
+			} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID");
+				LOG.info(">>>>>>>>>>>> dropIndex for policy_id done!!! ");
+			} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_UPD_TS");
+				LOG.info(">>>>>>>>>>>> dropIndex for update_timestamp done!!! ");
+			} else if ("ROLE_SCN".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_ROLE_SCN");
+			} else if ("ADDR_SCN".equalsIgnoreCase(columnName)) {
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_ADDR_SCN");
+			} else {
+				throw new Exception("Invalid Column Name:" + columnName);
+			}
+		} finally {
+			if (conn != null) conn.close();
+		}
+		return columnName;
+	}
 	public String createIndex(String columnName) throws Exception {
-		LOG.info(">>>>>>>>>>>> createIndexes ");
+		LOG.info(">>>>>>>>>>>> createIndex ");
 		Connection conn = null;
 		try {
 			Class.forName(sinkDbDriver);

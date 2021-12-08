@@ -31,7 +31,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.transglobe.streamingetl.partycontact.rest.bean.Address;
@@ -56,8 +58,12 @@ public class Consumer implements Runnable {
 	private String clientId;
 
 	private List<String> topicList;
-	
+
 	private String heartbeatTable;
+
+	private long scnLowMark;
+
+	private long scnHighMark;
 
 	public Consumer(int id,
 			String groupId,  
@@ -66,7 +72,9 @@ public class Consumer implements Runnable {
 			BasicDataSource sourceConnPool,
 			BasicDataSource sinkConnPool,
 			BasicDataSource logminerConnPool,
-			String heartbeatTable
+			String heartbeatTable,
+			long scnLowMark, 
+			long scnHighMark
 			) {
 		this.sourceConnPool = sourceConnPool;
 		this.sinkConnPool = sinkConnPool;
@@ -74,6 +82,8 @@ public class Consumer implements Runnable {
 		this.clientId = groupId + "-" + id;
 		this.topicList = topicList;
 		this.heartbeatTable = heartbeatTable;
+		this.scnLowMark = scnLowMark;
+		this.scnHighMark = scnHighMark;
 
 		Properties props = new Properties();
 		props.put("bootstrap.servers", bootstrapServers);
@@ -219,6 +229,23 @@ public class Consumer implements Runnable {
 				String rowId = payload.get("ROW_ID").asText();
 				//String sqlRedo = payload.get("SQL_REDO").toString();
 				logger.info("   >>>clientId={},offset={},operation={}, TableName={}, scn={}, commitScn={}, rowId={}", clientId, record.offset(), operation, tableName, scn, commitScn, rowId);
+
+
+				// check scn if it need to process
+				if (scn.longValue() < scnLowMark) {
+					logger.info("   >>>scn={},scnLowMark={}, skip",scn, scnLowMark);
+					continue;
+				} else if (scn.longValue() >= scnLowMark && scn.longValue() <= scnHighMark)  {
+					// check if record duplicate
+					boolean skip = checkSyncRecordExists(sinkConn, payload);
+					if (skip) {
+						continue;
+					}
+				} else {
+					logger.info(" >>> go ahread and processing scn={}, scnLowMark={}, scnHighMark={}", scn, scnLowMark, scnHighMark);
+				}
+
+
 
 				boolean isTtable = false;
 				boolean isTlogtable = false;
@@ -404,6 +431,8 @@ public class Consumer implements Runnable {
 				//							insertSupplLogSync(sinkConn, rsId, ssn, scn, t, "");
 
 				sinkConn.commit();
+				
+				scnHighMark = scn;
 				logger.info("   >>>Done !!!");
 			}
 		}  catch(Exception e) {
@@ -468,6 +497,86 @@ public class Consumer implements Runnable {
 	public boolean isConsumerClosed() {
 		return closed.get();
 	}
+	private boolean checkSyncRecordExists(Connection sinkConn, JsonNode payload) throws Exception, JsonProcessingException {
+		String sql = null;
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
+		boolean exists = false;
+		boolean skip = false;
+		try {
+			//	payloadStr = payload.toString();
+
+			String tableName = payload.get("TABLE_NAME").asText();
+			Long scn = Long.valueOf(payload.get("SCN").asText());
+			String rowId = payload.get("ROW_ID").asText();
+
+			Integer roleType = null; 
+			if (Table.T_POLICY_HOLDER.equals(tableName)
+					|| Table.T_POLICY_HOLDER_LOG.equals(tableName)) {
+				roleType = POLICY_HOLDER_ROLE_TYPE;
+			} else if (Table.T_INSURED_LIST.equals(tableName)
+					|| Table.T_INSURED_LIST_LOG.equals(tableName)) {
+				roleType = INSURED_LIST_ROLE_TYPE;
+			} else if (Table.T_CONTRACT_BENE.equals(tableName)
+					|| Table.T_CONTRACT_BENE_LOG.equals(tableName)) {
+				roleType = CONTRACT_BENE_ROLE_TYPE;
+			} 
+
+			ObjectMapper objectMapper = new ObjectMapper();
+			PartyContact partyContact;
+			PartyContact beforePartyContact;
+			Long listId;
+			if (roleType != null) {
+				String payLoadData = payload.get("data").toString();
+				String beforePayLoadData = payload.get("before").toString();
+				partyContact = (payLoadData == null)? null : objectMapper.readValue(payLoadData, PartyContact.class);;
+				beforePartyContact = (beforePayLoadData == null)? null : objectMapper.readValue(beforePayLoadData, PartyContact.class);;
+
+				if (partyContact != null) {
+					listId = partyContact.getListId();
+				}  else {
+					listId = beforePartyContact.getListId();
+				}
+
+				sql = "select ROLE_TABLE, ROW_SCN, ROLE_ROW_ID from " + Table.T_PARTY_CONTACT  + " where ROLE_TYPE = ? and LIST_ID = ?";
+				pstmt = sinkConn.prepareStatement(sql);
+				pstmt.setInt(1, roleType);
+				pstmt.setLong(2, listId);
+				rs = pstmt.executeQuery();
+				String roleTable = null;
+				String roleRowId = null;
+				Long roleScn = null;
+				while (rs.next()) {
+					roleTable = rs.getString("ROLE_TABLE");
+					roleScn = rs.getLong("ROW_SCN");
+					roleRowId = rs.getString("ROLE_ROW_ID");
+				}
+				rs.close();
+				pstmt.close();
+
+				if (StringUtils.equals(roleTable, tableName)) {
+					if (StringUtils.equals(roleRowId, rowId)) {
+						// same record, compare scn
+						if (scn.longValue() < roleScn.longValue()) {
+							skip = true;
+						}
+					}
+				} else {
+					logger.info(">>>> DIFFENT tabe, existingTable={}, syncTable={}",roleTable,  tableName);
+				}
+
+				return skip;
+			}
+		}
+		finally {
+			if (rs != null) rs.close();
+			if (pstmt != null) pstmt.close();
+		}
+		return exists;
+
+	}
+
+
 	private boolean checkSinkExists(Connection sinkConn, Integer roleType, Long listId) throws SQLException {
 		String sql = null;
 		PreparedStatement pstmt = null;
@@ -623,8 +732,8 @@ public class Consumer implements Runnable {
 					String address1 = getSourceAddress1(sourceConn, partyContact.getAddressId());
 					partyContact.setAddress1(address1);
 
-					sql = "insert into " + Table.T_PARTY_CONTACT + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,SCN,COMMIT_SCN,ROW_ID) " 
-							+ " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+					sql = "insert into " + Table.T_PARTY_CONTACT + " (ROLE_TYPE,LIST_ID,POLICY_ID,NAME,CERTI_CODE,MOBILE_TEL,EMAIL,ADDRESS_ID,ADDRESS_1,INSERT_TIMESTAMP,UPDATE_TIMESTAMP,ROLE_TABLE,ROLE_SCN,ROLE_COMMIT_SCN,ROLE_ROW_ID) " 
+							+ " values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
 					pstmt = sinkConn.prepareStatement(sql);
 					pstmt.setInt(1, partyContact.getRoleType());
 					pstmt.setLong(2, partyContact.getListId());
@@ -642,9 +751,10 @@ public class Consumer implements Runnable {
 					pstmt.setTimestamp(10, new Timestamp(t));
 					pstmt.setTimestamp(11, new Timestamp(t));
 
-					pstmt.setLong(12, scn);
-					pstmt.setLong(13, commitScn);
-					pstmt.setString(14, rowId);
+					pstmt.setString(12, tableName);
+					pstmt.setLong(13, scn);
+					pstmt.setLong(14, commitScn);
+					pstmt.setString(15, rowId);
 
 					pstmt.executeUpdate();
 					pstmt.close();
@@ -694,13 +804,14 @@ public class Consumer implements Runnable {
 					pstmt.setString(4, partyContact.getMobileTel());
 					pstmt.setString(5, partyContact.getEmail());
 					pstmt.setTimestamp(6, new Timestamp(t));
+
 					pstmt.setString(7, tableName);
 					pstmt.setLong(8, scn);
 					pstmt.setLong(9, commitScn);
 					pstmt.setString(10, rowId);
 
-					pstmt.setInt(10, partyContact.getRoleType());
-					pstmt.setLong(11, partyContact.getListId());
+					pstmt.setInt(11, partyContact.getRoleType());
+					pstmt.setLong(12, partyContact.getListId());
 
 					pstmt.executeUpdate();
 					pstmt.close();
@@ -711,7 +822,7 @@ public class Consumer implements Runnable {
 							&& partyContact.getAddressId() != null
 							&& partyAddressId.longValue() == partyContact.getAddressId().longValue()) {
 						sql = "update " + Table.T_PARTY_CONTACT
-								+ " set POLICY_ID=?,NAME=?,CERTI_CODE=?,MOBILE_TEL=?,EMAIL=?,UPDATE_TIMESTAMP=?,SCN=?,COMMIT_SCN=?,ROW_ID=?"
+								+ " set POLICY_ID=?,NAME=?,CERTI_CODE=?,MOBILE_TEL=?,EMAIL=?,UPDATE_TIMESTAMP=?,ROLE_TABLE=?,ROLE_SCN=?,ROLE_COMMIT_SCN=?,ROLE_ROW_ID=?"
 								+ " where ROLE_TYPE=? and LIST_ID=?";
 						pstmt = sinkConn.prepareStatement(sql);
 						pstmt.setLong(1, partyContact.getPolicyId());
@@ -720,11 +831,14 @@ public class Consumer implements Runnable {
 						pstmt.setString(4, partyContact.getMobileTel());
 						pstmt.setString(5, partyContact.getEmail());
 						pstmt.setTimestamp(6, new Timestamp(t));
-						pstmt.setLong(7, scn);
-						pstmt.setLong(8, commitScn);
-						pstmt.setString(9, rowId);
-						pstmt.setInt(10, partyContact.getRoleType());
-						pstmt.setLong(11, partyContact.getListId());
+
+						pstmt.setString(7, tableName);
+						pstmt.setLong(8, scn);
+						pstmt.setLong(9, commitScn);
+						pstmt.setString(10, rowId);
+
+						pstmt.setInt(11, partyContact.getRoleType());
+						pstmt.setLong(12, partyContact.getListId());
 
 						pstmt.executeUpdate();
 						pstmt.close();
@@ -736,7 +850,7 @@ public class Consumer implements Runnable {
 
 						// update 
 						sql = "update " + Table.T_PARTY_CONTACT
-								+ " set POLICY_ID=?,NAME=?,CERTI_CODE=?,MOBILE_TEL=?,EMAIL=?,ADDRESS_ID=?,ADDRESS_1=?,UPDATE_TIMESTAMP=?,SCN=?,COMMIT_SCN=?,ROW_ID=?"
+								+ " set POLICY_ID=?,NAME=?,CERTI_CODE=?,MOBILE_TEL=?,EMAIL=?,ADDRESS_ID=?,ADDRESS_1=?,UPDATE_TIMESTAMP=?,ROLE_TABLE=?,ROLE_SCN=?,ROLE_COMMIT_SCN=?,ROLE_ROW_ID=?"
 								+ " where ROLE_TYPE=? and LIST_ID=?";
 						pstmt = sinkConn.prepareStatement(sql);
 						pstmt.setLong(1, partyContact.getPolicyId());
@@ -747,11 +861,14 @@ public class Consumer implements Runnable {
 						pstmt.setLong(6, partyContact.getAddressId());
 						pstmt.setString(7, partyContact.getAddress1());
 						pstmt.setTimestamp(8, new Timestamp(t));
-						pstmt.setLong(9, scn);
-						pstmt.setLong(10, commitScn);
-						pstmt.setString(11, rowId);
-						pstmt.setInt(12, partyContact.getRoleType());
-						pstmt.setLong(13, partyContact.getListId());
+
+						pstmt.setString(9, tableName);
+						pstmt.setLong(10, scn);
+						pstmt.setLong(11, commitScn);
+						pstmt.setString(12, rowId);
+
+						pstmt.setInt(13, partyContact.getRoleType());
+						pstmt.setLong(14, partyContact.getListId());
 
 						pstmt.executeUpdate();
 						pstmt.close();
@@ -905,14 +1022,14 @@ public class Consumer implements Runnable {
 
 		CallableStatement cstmt = null;
 		try {
-			
+
 			cstmt = conn.prepareCall("{call SP_HEALTH_CONSUMER_RECEIVED(?,?,?,?)}");
 			cstmt.setString(1,  PartyContactETL.NAME);
 			cstmt.setString(2,  clientId);
 			cstmt.setTimestamp(3,  heartbeatTime);
 			cstmt.setTimestamp(4,  new Timestamp(System.currentTimeMillis()));
 			cstmt.execute();
-			
+
 			cstmt.close();
 
 		} catch(Exception e) {

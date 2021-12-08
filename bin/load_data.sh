@@ -1,13 +1,13 @@
 #!/bin/bash
 
 echo "loading T_POLICY_HOLDER"
-curl -X POST http://localhost:9201/partycontact/loadData/T_POLICY_HOLDER &
+#curl -X POST http://localhost:9201/partycontact/loadData/T_POLICY_HOLDER &
 
 echo "loading T_INSURED_LIST"
-curl -X POST http://localhost:9201/partycontact/loadData/T_INSURED_LIST &
+#curl -X POST http://localhost:9201/partycontact/loadData/T_INSURED_LIST &
 
 echo "loading T_CONTRACT_BENE"
-curl -X POST http://localhost:9201/partycontact/loadData/T_CONTRACT_BENE &
+#curl -X POST http://localhost:9201/partycontact/loadData/T_CONTRACT_BENE &
 
 echo "loading T_POLICY_HOLDER_LOG"
 curl -X POST http://localhost:9201/partycontact/loadData/T_POLICY_HOLDER_LOG &
@@ -17,6 +17,8 @@ curl -X POST http://localhost:9201/partycontact/loadData/T_INSURED_LIST_LOG
 
 echo "loading T_CONTRACT_BENE_LOG"
 curl -X POST http://localhost:9201/partycontact/loadData/T_CONTRACT_BENE_LOG
+
+sleep 10
 
 echo "addPrimaryKey"
 curl -X POST http://localhost:9201/partycontact/addPrimaryKey

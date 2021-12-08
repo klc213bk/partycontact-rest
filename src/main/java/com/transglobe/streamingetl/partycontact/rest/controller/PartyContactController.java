@@ -102,15 +102,15 @@ public class PartyContactController {
 //		
 //		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 //	}
-	@PostMapping(path="/applySyncTables", produces=MediaType.APPLICATION_JSON_VALUE)
+	@PostMapping(path="/applyLogminerSync", produces=MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
-	public ResponseEntity<Object> applySyncTables() {
-		LOG.info(">>>>controller applySync is called");
+	public ResponseEntity<Object> applyLogminerSync() {
+		LOG.info(">>>>controller applyLogminerSync is called");
 		
 		ObjectNode objectNode = mapper.createObjectNode();
 		
 		try {
-			String configMap = partyContactService.applySyncTables();
+			String configMap = partyContactService.applyLogminerSync();
 			objectNode.put("returnCode", "0000");
 			objectNode.put("configMap", configMap);
 		} catch (Exception e) {
@@ -122,19 +122,19 @@ public class PartyContactController {
 			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
 		}
 		
-		LOG.info(">>>>controller applySyncTables finished ");
+		LOG.info(">>>>controller applyLogminerSync finished ");
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
-	@PostMapping(path="/dropSyncTables", produces=MediaType.APPLICATION_JSON_VALUE)
+	@PostMapping(path="/dropLogminerSync", produces=MediaType.APPLICATION_JSON_VALUE)
 	@ResponseBody
-	public ResponseEntity<Object> dropSyncTables() {
-		LOG.info(">>>>controller dropSyncTables is called");
+	public ResponseEntity<Object> dropLogminerSync() {
+		LOG.info(">>>>controller dropLogminerSync is called");
 		
 		ObjectNode objectNode = mapper.createObjectNode();
 		
 		try {
-			String configMap = partyContactService.dropSyncTables();
+			String configMap = partyContactService.dropLogminerSync();
 			objectNode.put("returnCode", "0000");
 			objectNode.put("configMap", configMap);
 		} catch (Exception e) {
@@ -146,7 +146,7 @@ public class PartyContactController {
 			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
 		}
 		
-		LOG.info(">>>>controller dropSyncTables finished ");
+		LOG.info(">>>>controller dropLogminerSync finished ");
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
@@ -263,6 +263,50 @@ public class PartyContactController {
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
+	@PostMapping(value="/disablePrimaryKey")
+	@ResponseBody
+	public ResponseEntity<Object> disablePrimaryKey() throws Exception{
+		LOG.info(">>>>disablePrimaryKey ");
+		ObjectNode objectNode = mapper.createObjectNode();
+		try {
+			partyContactService.disablePrimaryKey();
+			objectNode.put("returnCode", "0000");
+
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+
+		LOG.info(">>>>controller disablePrimaryKey finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	@PostMapping(value="/enablePrimaryKey")
+	@ResponseBody
+	public ResponseEntity<Object> enablePrimaryKey() throws Exception{
+		LOG.info(">>>>disablePrimaryKey ");
+		ObjectNode objectNode = mapper.createObjectNode();
+		try {
+			partyContactService.disablePrimaryKey();
+			objectNode.put("returnCode", "0000");
+
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+
+		LOG.info(">>>>controller enablePrimaryKey finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
 	
 //	@PostMapping(value="/createIndexes")
 //	@ResponseBody
@@ -305,6 +349,50 @@ public class PartyContactController {
 		}
 
 		LOG.info(">>>>controller createIndex finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	@PostMapping(value="/createIndexes")
+	@ResponseBody
+	public ResponseEntity<Object> createIndexes() throws Exception{
+		LOG.info(">>>>createIndex ");
+		ObjectNode objectNode = mapper.createObjectNode();
+		try {
+			partyContactService.createIndexes();
+			objectNode.put("returnCode", "0000");
+
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+
+		LOG.info(">>>>controller createIndexes finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
+	@PostMapping(value="/dropIndexes")
+	@ResponseBody
+	public ResponseEntity<Object> dropIndexes() throws Exception{
+		LOG.info(">>>>createIndex ");
+		ObjectNode objectNode = mapper.createObjectNode();
+		try {
+			partyContactService.dropIndexes();
+			objectNode.put("returnCode", "0000");
+
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+
+		LOG.info(">>>>controller dropIndexes finished ");
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}

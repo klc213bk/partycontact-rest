@@ -1,5 +1,8 @@
 package com.transglobe.streamingetl.partycontact.rest.service;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -63,8 +66,11 @@ public class ConsumerService {
 	@Value("${kafka.bootstrap.server}")
 	private String kafkaBootstrapServer;
 
-	@Value("${kafka.consumer.topics}")
-	private String kafkaConsumerTopics;
+	@Value("${kafka.consumer.topics.default}")
+	private String kafkaConsumerTopicsDefault;
+	
+	@Value("${kafka.consumer.topics.partycontact}")
+	private String kafkaConsumerTopicsPartycontact;
 	
 	@Value("${heartbeat.table}")
 	private String heartbeatTable;
@@ -76,8 +82,42 @@ public class ConsumerService {
 	private ExecutorService executor = null;
 
 	private Consumer consumer = null;
-
-	public void start() throws Exception {
+	
+	private Boolean withPartyContactSync;
+	
+	
+	
+	public Boolean getWithPartyContactSync() {
+		return withPartyContactSync;
+	}
+	public void startPartyContactConsumer() throws Exception {
+		
+		List<String> topicList = new ArrayList<>();
+		String[] topicArr = kafkaConsumerTopicsDefault.split(",");
+		for (String e : topicArr) {
+			topicList.add(e);
+		}
+		
+		String[] pcTopicArr = kafkaConsumerTopicsPartycontact.split(",");
+		for (String e : pcTopicArr) {
+			topicList.add(e);
+		}
+		
+		LOG.info(">>>>>>>>>>>> startPartyContactConsumer:{} ", String.join(",", topicList));
+		
+		withPartyContactSync = Boolean.TRUE;
+		start(topicList);
+	}
+	public void startDefaultConsumer() throws Exception {
+		String[] topicArr = kafkaConsumerTopicsDefault.split(",");
+		List<String> topicList = Arrays.asList(topicArr);
+		
+		LOG.info(">>>>>>>>>>>> startDefaultConsumer:{} ", String.join(",", topicList));
+		
+		withPartyContactSync = Boolean.FALSE;
+		start(topicList);
+	}
+	public void start(List<String> topicList) throws Exception {
 		LOG.info(">>>>>>>>>>>> start ");
 
 		sourceConnPool = new BasicDataSource();
@@ -101,13 +141,43 @@ public class ConsumerService {
 		tglminerConnPool.setPassword(tglminerDbPassword);
 		tglminerConnPool.setMaxTotal(1);
 
-		String[] topicArr = kafkaConsumerTopics.split(",");
-		List<String> topicList = Arrays.asList(topicArr);
-
+		
+		// get scnLowmark, scnHighmark
+		Connection conn = null;
+		PreparedStatement pstmt = null;
+		ResultSet rs = null;
+		String sql = null;
+		long scnLowMark = 0L;
+		long scnHighMark = 0L;
+		try {
+			conn = sinkConnPool.getConnection();
+			sql = "select MAX(ROLE_SCN) MAX_ROLE_SCN, MAX(ADDR_SCN), MAX_ADDR_SCN, \n" +
+					" MIN(ROLE_SCN) MIN_ROLE_SCN, MIN(ADDR_SCN) MIN_ADDR_SCN from T_PARTY_CONTACT";
+			pstmt = conn.prepareStatement(sql);
+			rs = pstmt.executeQuery();
+			long maxRoleScn = 0L;
+			long maxAddrScn = 0L;
+			long minRoleScn = 0L;
+			long minAddrScn = 0L;
+			while (rs.next()) {
+				maxRoleScn = rs.getLong("MAX_ROLE_SCN");
+				maxAddrScn = rs.getLong("MAX_ADDR_SCN");
+				minRoleScn = rs.getLong("MIN_ROLE_SCN");
+				minAddrScn = rs.getLong("MIN_ADDR_SCN");
+			}
+			scnHighMark = (maxRoleScn > maxAddrScn)? maxRoleScn : maxAddrScn;
+			scnLowMark = (minRoleScn < minAddrScn)? minRoleScn : minAddrScn;
+		} finally {
+			if (pstmt != null) pstmt.close();
+			if (conn != null) conn.close();
+		}
+		LOG.info(">>>>>>>>>>>> scnLowMark={},scnHighMark={} ", scnLowMark, scnHighMark);
+		
 		executor = Executors.newFixedThreadPool(1);
 
 		//		String groupId1 = config.groupId1;
-		consumer = new Consumer(1, CONSUMER_GROUP_1, kafkaBootstrapServer, topicList, sourceConnPool, sinkConnPool, tglminerConnPool, heartbeatTable);
+		consumer = new Consumer(1, CONSUMER_GROUP_1, kafkaBootstrapServer, topicList, 
+				sourceConnPool, sinkConnPool, tglminerConnPool, heartbeatTable, scnLowMark, scnHighMark);
 		executor.submit(consumer);
 
 		LOG.info(">>>>>>>>>>>> started Done!!!");

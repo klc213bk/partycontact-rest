@@ -151,7 +151,7 @@ public class ConsumerService {
 		long scnHighMark = 0L;
 		try {
 			conn = sinkConnPool.getConnection();
-			sql = "select MAX(ROLE_SCN) MAX_ROLE_SCN, MAX(ADDR_SCN), MAX_ADDR_SCN, \n" +
+			sql = "select MAX(ROLE_SCN) MAX_ROLE_SCN, MAX(ADDR_SCN) MAX_ADDR_SCN, \n" +
 					" MIN(ROLE_SCN) MIN_ROLE_SCN, MIN(ADDR_SCN) MIN_ADDR_SCN from T_PARTY_CONTACT";
 			pstmt = conn.prepareStatement(sql);
 			rs = pstmt.executeQuery();

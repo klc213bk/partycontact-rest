@@ -174,16 +174,13 @@ public class PartyContactService {
 			rs.close();
 			pstmt.close();
 
-			List<String> topicList = new ArrayList<>();
-			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
-				topicList.add(e.getTopic());
-			}
+
+			LOG.info(">>> delete kafka topic");
 			Set<String> topicSet = TopicUtils.listTopics();
-			LOG.info(">>> list topics set ={}", String.join(",", topicSet));
-			for (String t : topicList) {
-				if (topicSet.contains(t)) {
-					TopicUtils.deleteTopic(t);
-					LOG.info(">>>>>>>>>>>> topic={} deleted ", t);
+			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
+				if (topicSet.contains(e.getTopic())) {
+					TopicUtils.deleteTopic(e.getTopic());
+					LOG.info(">>>>>>>>>>>> topic={} deleted ", e.getTopic());
 
 				}
 			}
@@ -329,11 +326,16 @@ public class PartyContactService {
 			conn.commit();
 
 			LOG.info(">>> insert kafka topic");
+			
+			LOG.info(">>> insert kafka topic");
+			Set<String> topicSet = TopicUtils.listTopics();
 			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
-				String topic = e.getTopic();
-				String insertTopicUrl = kafkaRestUrl + "/kafka/createTopic/" + topic;
-				String response = HttpUtils.restService(insertTopicUrl, "POST");
-				LOG.info(">>>>>>> kafka topic {} created, response={}", topic,response);
+				if (topicSet.contains(e.getTopic())) {
+					TopicUtils.deleteTopic(e.getTopic());
+					LOG.info(">>>>>>>>>>>> deleteTopic:{} done", e.getTopic());
+				}
+				TopicUtils.createTopic(e.getTopic());
+				LOG.info(">>>>>>>>>>>> createTopic:{} done ", e.getTopic());
 			}
 
 
@@ -361,11 +363,11 @@ public class PartyContactService {
 
 		List<String> tableList = new ArrayList<>();
 		tableList.add(Table.T_POLICY_HOLDER);
-		tableList.add(Table.T_POLICY_HOLDER_LOG);
-		tableList.add(Table.T_INSURED_LIST);
-		tableList.add(Table.T_INSURED_LIST_LOG);
-		tableList.add(Table.T_CONTRACT_BENE);
-		tableList.add(Table.T_CONTRACT_BENE_LOG);
+//		tableList.add(Table.T_POLICY_HOLDER_LOG);
+//		tableList.add(Table.T_INSURED_LIST);
+//		tableList.add(Table.T_INSURED_LIST_LOG);
+//		tableList.add(Table.T_CONTRACT_BENE);
+//		tableList.add(Table.T_CONTRACT_BENE_LOG);
 
 		List<CompletableFuture<Long>> futures = 
 				tableList.stream().map(t ->CompletableFuture.supplyAsync(
@@ -490,7 +492,7 @@ public class PartyContactService {
 		}
 	}
 	public void enablePrimaryKey() throws Exception {
-		LOG.info(">>>>>>>>>>>> disablePrimaryKey ");
+		LOG.info(">>>>>>>>>>>> enablePrimaryKey ");
 		Connection conn = null;
 		Statement stmt = null;
 		try {
@@ -542,7 +544,7 @@ public class PartyContactService {
 		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
 
 	}
-	public void dropIndexes() throws Exception {
+	public void dropIndexes()  {
 
 		ExecutorService executor = Executors.newFixedThreadPool(8);
 
@@ -556,23 +558,16 @@ public class PartyContactService {
 		indexList.add("ROLE_SCN");
 		indexList.add("ADDR_SCN");
 
-		List<CompletableFuture<String>> futures = 
-				indexList.stream().map(t ->CompletableFuture.supplyAsync(
-						() -> {		
-							String ret = "";
-							try {
-								ret = dropIndex(t);
-							} catch (Exception e) {
-								LOG.error("message={}, stack trace={}", e.getMessage(), ExceptionUtils.getStackTrace(e));
-							}
-							return ret;
-						}
-						, executor)
-						)
-				.collect(Collectors.toList());			
-
-		List<String> result = futures.stream().map(CompletableFuture::join).collect(Collectors.toList());
-
+		for (String t : indexList) {
+			
+			try {
+				dropIndex(t);
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+		}
 	}
 	public String dropIndex(String columnName) throws Exception {
 		LOG.info(">>>>>>>>>>>> dropIndex ");
@@ -594,7 +589,7 @@ public class PartyContactService {
 				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_CERTI_CODE");
 				LOG.info(">>>>>>>>>>>> dropIndex for certi_code done!!! ");
 			} else if ("POLICY_ID".equalsIgnoreCase(columnName)) {
-				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_POLICY_ID");
+				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_POLICY_ID");
 				LOG.info(">>>>>>>>>>>> dropIndex for policy_id done!!! ");
 			} else if ("UPDATE_TIMESTAMP".equalsIgnoreCase(columnName)) {
 				executeScript(conn,"DROP INDEX IDX_T_PARTY_CONTACT_UPD_TS");
@@ -612,7 +607,7 @@ public class PartyContactService {
 		return columnName;
 	}
 	public String createIndex(String columnName) throws Exception {
-		LOG.info(">>>>>>>>>>>> createIndex ");
+		LOG.info(">>>>>>>>>>>> createIndex ={}", columnName);
 		Connection conn = null;
 		try {
 			Class.forName(sinkDbDriver);
@@ -638,8 +633,10 @@ public class PartyContactService {
 				LOG.info(">>>>>>>>>>>> createIndex for update_timestamp done!!! ");
 			} else if ("ROLE_SCN".equalsIgnoreCase(columnName)) {
 				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_ROLE_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ROLE_SCN)");
+				LOG.info(">>>>>>>>>>>> createIndex for ROLE_SCN!!! ");
 			} else if ("ADDR_SCN".equalsIgnoreCase(columnName)) {
 				executeScript(conn,"CREATE INDEX IDX_T_PARTY_CONTACT_ADDR_SCN ON " + PartyContactTableEnum.T_PARTY_CONTACT.getTableName() + " (ADDR_SCN)");
+				LOG.info(">>>>>>>>>>>> createIndex for ADDR_SCN!!! ");
 			} else {
 				throw new Exception("Invalid Column Name:" + columnName);
 			}

@@ -341,6 +341,7 @@ public class Consumer implements Runnable {
 
 					} else {
 						// ignore
+						logger.info("   >>>liabilityState={}, ignore", liabilityState);
 					}
 
 				} // Log 表

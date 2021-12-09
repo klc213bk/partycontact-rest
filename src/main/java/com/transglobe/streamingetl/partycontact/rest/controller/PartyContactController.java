@@ -288,10 +288,10 @@ public class PartyContactController {
 	@PostMapping(value="/enablePrimaryKey")
 	@ResponseBody
 	public ResponseEntity<Object> enablePrimaryKey() throws Exception{
-		LOG.info(">>>>disablePrimaryKey ");
+		LOG.info(">>>>enablePrimaryKey ");
 		ObjectNode objectNode = mapper.createObjectNode();
 		try {
-			partyContactService.disablePrimaryKey();
+			partyContactService.enablePrimaryKey();
 			objectNode.put("returnCode", "0000");
 
 		} catch (Exception e) {

@@ -45,6 +45,7 @@ public class HttpUtils {
 		try {
 			url = new URL(urlStr);
 			httpConn = (HttpURLConnection)url.openConnection();
+			httpConn.setRequestMethod("POST");
 			httpConn.setRequestProperty("Content-Type", "application/json;utf-8" );
 			httpConn.setRequestProperty("Accept", "application/json" );
 			httpConn.setDoOutput(true);

@@ -110,7 +110,7 @@ public class PartyContactController {
 		ObjectNode objectNode = mapper.createObjectNode();
 		
 		try {
-			String configMap = partyContactService.applyLogminerSync();
+			String configMap = partyContactService.applyLogminerSync(null, 1);
 			objectNode.put("returnCode", "0000");
 			objectNode.put("configMap", configMap);
 		} catch (Exception e) {
@@ -134,7 +134,7 @@ public class PartyContactController {
 		ObjectNode objectNode = mapper.createObjectNode();
 		
 		try {
-			String configMap = partyContactService.dropLogminerSync();
+			String configMap = partyContactService.applyLogminerSync(null, -1);
 			objectNode.put("returnCode", "0000");
 			objectNode.put("configMap", configMap);
 		} catch (Exception e) {

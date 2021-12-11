@@ -214,9 +214,8 @@ public class PartyContactService {
 	//
 	//		LOG.info(">>>>>>> applyLogminerSync response={}", response);
 	//	}
-	public String applyLogminerSync() throws Exception{
-		LOG.info(">>>>>>> applyLogminerSync ...");
-
+	public String applyLogminerSync(Boolean resetOffset, int addOrDrop) throws Exception{
+		LOG.info(">>>>>>> applyLogminerSync ");
 		List<String> tableList = new ArrayList<>();
 		for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
 			tableList.add(e.getSyncTableName());
@@ -224,9 +223,9 @@ public class PartyContactService {
 		String tableListStr = String.join(",", tableList);
 
 		ApplyLogminerSync applySync = new ApplyLogminerSync();
-		applySync.setResetOffset(false);
+		applySync.setResetOffset(resetOffset);
 		applySync.setStartScn(null);
-		applySync.setApplyOrDrop(1);
+		applySync.setApplyOrDrop((addOrDrop == 1)? 1 : -1);
 		applySync.setTableListStr(tableListStr);
 
 
@@ -234,25 +233,7 @@ public class PartyContactService {
 
 		return response;
 	}
-	public String dropLogminerSync() throws Exception{
-		LOG.info(">>>>>>> call dropLogminerSync ...");
-
-		List<String> tableList = new ArrayList<>();
-		for (PartyContactSyncTableEnum e : PartyContactSyncTableEnum.values()) {
-			tableList.add(e.getSyncTableName());
-		}
-		String tableListStr = String.join(",", tableList);
-
-		ApplyLogminerSync applySync = new ApplyLogminerSync();
-		applySync.setResetOffset(false);
-		applySync.setStartScn(null);
-		applySync.setApplyOrDrop(-1);
-		applySync.setTableListStr(tableListStr);
-
-		String response = LogminerUtils.restartLogminerConnector(applySync);
-
-		return response;
-	}
+	
 	//	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
 	//		LOG.info(">>>>>>> restartLogminerConnector ...");
 	//

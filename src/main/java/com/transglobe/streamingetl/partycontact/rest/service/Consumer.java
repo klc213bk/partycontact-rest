@@ -209,8 +209,9 @@ public class Consumer implements Runnable {
 		try {
 			sourceConn = sourceConnPool.getConnection();
 			sinkConn = sinkConnPool.getConnection();
-			sourceConn.setAutoCommit(false);
+			logminerConn = logminerConnPool.getConnection();
 			sinkConn.setAutoCommit(false);
+			logminerConn.setAutoCommit(false);
 
 			for (ConsumerRecord<String, String> record : buffer) {
 				recordEx = record;
@@ -220,6 +221,11 @@ public class Consumer implements Runnable {
 
 				JsonNode jsonNode = objectMapper.readTree(record.value());
 				JsonNode payload = jsonNode.get("payload");
+
+				// insert payload log
+				insertPayloadLog(logminerConn, payload);
+				logminerConn.commit();
+				
 				//	payloadStr = payload.toString();
 
 				String operation = payload.get("OPERATION").asText();
@@ -1029,6 +1035,39 @@ public class Consumer implements Runnable {
 			cstmt.setString(2,  clientId);
 			cstmt.setTimestamp(3,  heartbeatTime);
 			cstmt.setTimestamp(4,  new Timestamp(System.currentTimeMillis()));
+			cstmt.execute();
+
+			cstmt.close();
+
+		} catch(Exception e) {
+			logger.error(">>> Response code={}", ExceptionUtils.getMessage(e), ExceptionUtils.getStackTrace(e));
+			throw e;
+		} finally {
+			if (cstmt != null ) cstmt.close();;
+		}
+	}
+	private void insertPayloadLog(Connection conn, JsonNode payload) throws Exception{
+		logger.info(">>>>> insertPayloadLog ");
+
+		String operation = payload.get("OPERATION").asText();
+		String tableName = payload.get("TABLE_NAME").asText();
+		Long scn = Long.valueOf(payload.get("SCN").asText());
+		Long commitScn = Long.valueOf(payload.get("COMMIT_SCN").asText());
+		String rowId = payload.get("ROW_ID").asText();
+		String sqlRedo = payload.get("SQL_REDO").toString();
+		
+		
+		CallableStatement cstmt = null;
+		try {
+
+			cstmt = conn.prepareCall("{call SP_INS_PAYLOAD_LOG(?,?,?,?,?,?,?)}");
+			cstmt.setString(1,  PartyContactETL.NAME);
+			cstmt.setString(2,  operation);
+			cstmt.setString(3,  tableName);
+			cstmt.setLong(4,  scn);
+			cstmt.setLong(5,  commitScn);
+			cstmt.setString(6,  rowId);
+			cstmt.setString(7,  StringUtils.substring(sqlRedo, 0, 3000));
 			cstmt.execute();
 
 			cstmt.close();

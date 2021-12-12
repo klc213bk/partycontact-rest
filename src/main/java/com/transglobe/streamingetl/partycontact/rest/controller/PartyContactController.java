@@ -196,6 +196,27 @@ public class PartyContactController {
 		
 		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
 	}
+	@PostMapping(value="/dropTable/{table}")
+	@ResponseBody
+	public ResponseEntity<Object> dropTable(@PathVariable("table") String table) throws Exception{
+		LOG.info(">>>>dropTable");
+		ObjectNode objectNode = mapper.createObjectNode();
+		try {
+			partyContactService.dropTable(table);
+			objectNode.put("returnCode", "0000");
+		} catch (Exception e) {
+			String errMsg = ExceptionUtils.getMessage(e);
+			String stackTrace = ExceptionUtils.getStackTrace(e);
+			objectNode.put("returnCode", "-9999");
+			objectNode.put("errMsg", errMsg);
+			objectNode.put("returnCode", stackTrace);
+			LOG.error(">>> errMsg={}, stacktrace={}",errMsg,stackTrace);
+		}
+
+		LOG.info(">>>>controller dropTable finished ");
+		
+		return new ResponseEntity<Object>(objectNode, HttpStatus.OK);
+	}
 	
 	@PostMapping(value="/loadData/{table}")
 	@ResponseBody

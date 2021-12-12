@@ -233,7 +233,7 @@ public class PartyContactService {
 
 		return response;
 	}
-	
+
 	//	public String restartLogminerConnector(ApplyLogminerSync applySync) throws Exception{
 	//		LOG.info(">>>>>>> restartLogminerConnector ...");
 	//
@@ -249,12 +249,12 @@ public class PartyContactService {
 	//
 	//		return response;
 	//	}
-//	public void dropLogminerSync() throws Exception{
-//		LOG.info(">>>>>>> call dropLogminerSync ...");
-//		String dropLogminerSyncUrl = tglminerRestUrl + "/tglminer/dropLogminerSync/" + PartyContactETL.NAME;
-//		LOG.info(">>>>>>> dropLogminerSyncUrl={}", dropLogminerSyncUrl); 
-//		String response = HttpUtils.restService(dropLogminerSyncUrl, "POST");
-//	}
+	//	public void dropLogminerSync() throws Exception{
+	//		LOG.info(">>>>>>> call dropLogminerSync ...");
+	//		String dropLogminerSyncUrl = tglminerRestUrl + "/tglminer/dropLogminerSync/" + PartyContactETL.NAME;
+	//		LOG.info(">>>>>>> dropLogminerSyncUrl={}", dropLogminerSyncUrl); 
+	//		String response = HttpUtils.restService(dropLogminerSyncUrl, "POST");
+	//	}
 
 	//	public void stopPartyContact() throws Exception {
 	//		LOG.info(">>>>>>> stopPartyContact ...");
@@ -276,6 +276,7 @@ public class PartyContactService {
 		Connection conn = null;
 
 		PreparedStatement pstmt = null;
+		ResultSet rs = null;
 		String sql = null;
 		try {
 
@@ -295,6 +296,26 @@ public class PartyContactService {
 			}
 			conn.commit();
 
+			sql = "select count(*) CNT from TM_HEALTH_STATUS where ETL_NAME=?";
+			pstmt = conn.prepareStatement(sql);
+			pstmt.setString(1, PartyContactETL.NAME);
+			rs = pstmt.executeQuery();
+			boolean exists = false;
+			while (rs.next()) {
+				exists = true;
+				break;
+			}
+			rs.close();
+			pstmt.close();
+			if (exists) {
+				sql = "delete from TM_HEALTH_STATUS where ETL_NAME=?";
+				pstmt = conn.prepareStatement(sql);
+				pstmt.setString(1, PartyContactETL.NAME);
+				pstmt.executeUpdate();
+				pstmt.close();
+				conn.commit();
+			} 
+
 			LOG.info(">>> insert initial data");
 			sql = "insert into TM_HEALTH_STATUS (ETL_NAME,HEALTH_STATE,UPDATE_TIMESTAMP) \n" +
 					" values (?,?,?)";
@@ -306,8 +327,9 @@ public class PartyContactService {
 			pstmt.close();
 			conn.commit();
 
+
 			LOG.info(">>> insert kafka topic");
-			
+
 			LOG.info(">>> insert kafka topic");
 			Set<String> topicSet = TopicUtils.listTopics();
 			for (PartyContactTopicEnum e : PartyContactTopicEnum.values()) {
@@ -321,6 +343,7 @@ public class PartyContactService {
 
 
 		} finally {
+			if (rs != null) rs.close();
 			if (pstmt != null) pstmt.close();
 			if (conn != null) conn.close();
 		}
@@ -338,6 +361,17 @@ public class PartyContactService {
 			if (conn != null) conn.close();
 		}
 	}
+	public void dropTable(String table) throws Exception {
+		LOG.info(">>>>>>>>>>>> dropTable ");
+		Connection conn = null;
+		try {
+			executeScript(conn, "DROP TABLE " + table);
+
+			LOG.info(">>>>>>>>>>>> dropTable Done!!!");
+		} finally {
+			if (conn != null) conn.close();
+		}
+	}
 	public long loadAllData() throws Exception {
 
 		ExecutorService executor = Executors.newFixedThreadPool(6);
@@ -345,10 +379,10 @@ public class PartyContactService {
 		List<String> tableList = new ArrayList<>();
 		tableList.add(Table.T_POLICY_HOLDER);
 		tableList.add(Table.T_POLICY_HOLDER_LOG);
-//		tableList.add(Table.T_INSURED_LIST);
-//		tableList.add(Table.T_INSURED_LIST_LOG);
-//		tableList.add(Table.T_CONTRACT_BENE);
-//		tableList.add(Table.T_CONTRACT_BENE_LOG);
+		//		tableList.add(Table.T_INSURED_LIST);
+		//		tableList.add(Table.T_INSURED_LIST_LOG);
+		//		tableList.add(Table.T_CONTRACT_BENE);
+		//		tableList.add(Table.T_CONTRACT_BENE_LOG);
 
 		List<CompletableFuture<Long>> futures = 
 				tableList.stream().map(t ->CompletableFuture.supplyAsync(
@@ -540,14 +574,14 @@ public class PartyContactService {
 		indexList.add("ADDR_SCN");
 
 		for (String t : indexList) {
-			
+
 			try {
 				dropIndex(t);
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			
+
 		}
 	}
 	public String dropIndex(String columnName) throws Exception {

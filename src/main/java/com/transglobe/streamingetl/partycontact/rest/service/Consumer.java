@@ -211,11 +211,12 @@ public class Consumer implements Runnable {
 			sinkConn = sinkConnPool.getConnection();
 			logminerConn = logminerConnPool.getConnection();
 			sinkConn.setAutoCommit(false);
-			logminerConn.setAutoCommit(false);
 
 			for (ConsumerRecord<String, String> record : buffer) {
 				recordEx = record;
 
+				logger.info("   >>>record topic={}, key={},value={},offset={}", record.topic(), record.key(), record.value(), record.offset());
+				
 				ObjectMapper objectMapper = new ObjectMapper();
 				objectMapper.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
@@ -223,8 +224,7 @@ public class Consumer implements Runnable {
 				JsonNode payload = jsonNode.get("payload");
 
 				// insert payload log
-				insertPayloadLog(logminerConn, payload);
-				logminerConn.commit();
+				insertPayloadLog(logminerConn, payload, record.topic(), record.offset());
 				
 				//	payloadStr = payload.toString();
 
@@ -421,13 +421,8 @@ public class Consumer implements Runnable {
 					long hartBeatTimeMs = Long.valueOf(payLoadData.get("HEARTBEAT_TIME").asText());
 					Timestamp heartbeatTime = new Timestamp(hartBeatTimeMs);
 
-					logminerConn = logminerConnPool.getConnection();
-					try {
-						updateHealthConsumerReceived(logminerConn, clientId, heartbeatTime);
-					}
-					finally {
-						if (logminerConn != null) logminerConn.close();
-					}
+					updateHealthConsumerReceived(logminerConn, clientId, heartbeatTime);
+					
 				} else {
 					throw new Exception(">>> Error: no such table name:" + tableName);
 				}
@@ -1046,7 +1041,7 @@ public class Consumer implements Runnable {
 			if (cstmt != null ) cstmt.close();;
 		}
 	}
-	private void insertPayloadLog(Connection conn, JsonNode payload) throws Exception{
+	private void insertPayloadLog(Connection conn, JsonNode payload, String topic, long offset) throws Exception{
 		logger.info(">>>>> insertPayloadLog ");
 
 		String operation = payload.get("OPERATION").asText();
@@ -1054,20 +1049,22 @@ public class Consumer implements Runnable {
 		Long scn = Long.valueOf(payload.get("SCN").asText());
 		Long commitScn = Long.valueOf(payload.get("COMMIT_SCN").asText());
 		String rowId = payload.get("ROW_ID").asText();
-		String sqlRedo = payload.get("SQL_REDO").toString();
+		String sqlRedo = payload.get("SQL_REDO").asText();
 		
 		
 		CallableStatement cstmt = null;
 		try {
 
-			cstmt = conn.prepareCall("{call SP_INS_PAYLOAD_LOG(?,?,?,?,?,?,?)}");
+			cstmt = conn.prepareCall("{call SP_INS_PAYLOAD_LOG(?,?,?,?,?,?,?,?,?)}");
 			cstmt.setString(1,  PartyContactETL.NAME);
 			cstmt.setString(2,  operation);
 			cstmt.setString(3,  tableName);
-			cstmt.setLong(4,  scn);
-			cstmt.setLong(5,  commitScn);
-			cstmt.setString(6,  rowId);
-			cstmt.setString(7,  StringUtils.substring(sqlRedo, 0, 3000));
+			cstmt.setString(4,  topic);
+			cstmt.setLong(5,  offset);
+			cstmt.setLong(6,  scn);
+			cstmt.setLong(7,  commitScn);
+			cstmt.setString(8,  rowId);
+			cstmt.setString(9,  StringUtils.substring(sqlRedo, 0, 3000));
 			cstmt.execute();
 
 			cstmt.close();

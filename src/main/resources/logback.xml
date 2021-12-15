@@ -1,5 +1,5 @@
 <configuration>
-	<property name="LOG_DIR" value="/data/partycontact/logs" />
+	<property name="LOG_DIR" value="/data/partycontact-rest/logs" />
 	<property name="LOG_FILE" value="partycontact-rest" />
 	<appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
 		<encoder>

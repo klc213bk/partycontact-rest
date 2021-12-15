@@ -379,10 +379,10 @@ public class PartyContactService {
 		List<String> tableList = new ArrayList<>();
 		tableList.add(Table.T_POLICY_HOLDER);
 		tableList.add(Table.T_POLICY_HOLDER_LOG);
-		//		tableList.add(Table.T_INSURED_LIST);
-		//		tableList.add(Table.T_INSURED_LIST_LOG);
-		//		tableList.add(Table.T_CONTRACT_BENE);
-		//		tableList.add(Table.T_CONTRACT_BENE_LOG);
+		tableList.add(Table.T_INSURED_LIST);
+		tableList.add(Table.T_INSURED_LIST_LOG);
+		tableList.add(Table.T_CONTRACT_BENE);
+		tableList.add(Table.T_CONTRACT_BENE_LOG);
 
 		List<CompletableFuture<Long>> futures = 
 				tableList.stream().map(t ->CompletableFuture.supplyAsync(
